@@ -19,13 +19,14 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def load_and_validate():
-    taxonomy = read(DATA / 'taxonomy.json')
-    topics = read(DATA / 'topics.json')
-    content = read(DATA / 'content.json')
-    sources = read(DATA / 'sources.json')
-    redirects = read(DATA / 'topic-redirects.json')
-    practice = [q for path in sorted((DATA / 'practice').glob('*.json')) for q in read(path)]
+def load_and_validate(data_dir=None):
+    data_dir = Path(data_dir) if data_dir is not None else DATA
+    taxonomy = read(data_dir / 'taxonomy.json')
+    topics = read(data_dir / 'topics.json')
+    content = read(data_dir / 'content.json')
+    sources = read(data_dir / 'sources.json')
+    redirects = read(data_dir / 'topic-redirects.json')
+    practice = [q for path in sorted((data_dir / 'practice').glob('*.json')) for q in read(path)]
     categories = {c['primary_category'] for c in taxonomy['categories']}
     subs = {s['subcategory_id']: s for s in taxonomy['subcategories']}
     topic_map = {t['study_topic_id']: t for t in topics}
