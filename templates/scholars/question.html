@@ -1,1 +1,21 @@
-{% extends 'base.html' %}{% block content %}<div class="quiz"><p class="eyebrow">RECOGNITION PRACTICE · QUESTION {{ item.position }} OF {{ session.total }}</p><progress value="{{ session.answered }}" max="{{ session.total }}" aria-label="Questions answered"></progress><p class="muted">{{ session.answered }} answers saved · You can leave and return anytime.</p><h1 class="question">{{ item.revision.payload.question }}</h1><form method="post" action="{% url 'scholars:answer' session.pk item.position %}" class="panel answers">{% csrf_token %}{{ form.as_p }}<button>Check answer →</button></form><a href="{% url 'scholars:history' %}">Save and leave</a></div>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Practice · Scholars Bowl{% endblock %}
+{% block content %}<div class="quiz">
+<p class="muted">{{ session.display_mode }} · {{ session.display_selection }} · Question {{ item.position }} of {{ session.total }}</p><progress value="{{ session.answered }}" max="{{ session.total }}" aria-label="Questions answered"></progress>
+<h1 class="question" id="question">{{ item.revision.payload.question }}</h1>
+{% if session.mode == 'recall' %}
+  {% if item.revealed_at %}
+    <p><strong>Answer:</strong> {{ item.revision.payload.correct_answer }}</p><p>{{ item.revision.payload.explanation }}</p>
+    <form method="post" action="{% url 'scholars:answer' session.pk item.position %}" class="answers">{% csrf_token %}{{ form.as_p }}<button>Save assessment</button></form>
+  {% else %}
+    <p>Think of the answer, then reveal it.</p>
+    {{ form.non_field_errors }}
+    <form method="post" action="{% url 'scholars:reveal' session.pk item.position %}">{% csrf_token %}<button>Reveal answer</button></form>
+  {% endif %}
+{% else %}
+<form method="post" action="{% url 'scholars:answer' session.pk item.position %}" class="answers">{% csrf_token %}
+{{ form.non_field_errors }}{{ form.selected.errors }}<fieldset aria-labelledby="question"><legend class="sr-only">Choose your answer</legend>{{ form.selected }}</fieldset><button>Check answer</button></form>
+{% endif %}
+<p><a href="{% url 'scholars:history' %}">Save and leave</a></p>
+<details><summary>End this session</summary><p>Keep saved answers and stop this session. You can start another anytime.</p><form method="post" action="{% url 'scholars:abandon' session.pk %}">{% csrf_token %}<button class="secondary">End session</button></form></details>
+</div>{% endblock %}

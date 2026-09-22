@@ -1,1 +1,3 @@
-<p><strong>Your answer:</strong> {{ item.selected_text }}</p><p><strong>Correct answer:</strong> {{ item.revision.payload.correct_answer }}</p><p>{{ item.revision.payload.explanation }}</p><p><a href="{% url 'scholars:topic' item.revision.payload.study_topic_id %}">Study {{ item.revision.context.topic.topic }} →</a> · <a href="{% url 'scholars:evidence' session.pk item.position %}">Sources for this question</a></p>
+{% if session.mode == 'recognition' and not item.is_correct %}<p><strong>Your answer:</strong> {{ item.selected_text }}</p>{% endif %}
+<p><strong>Correct answer:</strong> {{ item.revision.payload.correct_answer }}</p><p>{{ item.revision.payload.explanation }}</p>
+<p class="answer-links"><a href="{% url 'scholars:topic' item.revision.payload.study_topic_id %}">{{ item.revision.context.topic.topic }}</a> · <a href="{% url 'scholars:evidence' session.pk item.position %}">Sources</a></p>

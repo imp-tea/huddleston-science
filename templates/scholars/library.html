@@ -1,1 +1,19 @@
-{% extends 'base.html' %}{% block content %}<p class="eyebrow">SCHOLARS BOWL / LIBRARY</p><h1>Find your next discovery.</h1><form method="get" class="panel filters"><div><label for="query">Search topics</label><input id="query" type="search" name="q" value="{{ query }}" maxlength="100"></div><div><label for="category">Category</label><select id="category" name="category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c.pk }}" {% if category == c.pk %}selected{% endif %}>{{ c.pk }}</option>{% endfor %}</select></div><div><label for="subcategory">Subcategory</label><select id="subcategory" name="subcategory"><option value="">All subcategories</option>{% for s in subcategories %}<option value="{{ s.pk }}" {% if subcategory == s.pk %}selected{% endif %}>{{ s.payload.label }}</option>{% endfor %}</select></div><button>Find topics</button><a href="{% url 'scholars:library' %}">Clear filters</a></form><div class="section-heading"><p>{{ topics.paginator.count }} topic{{ topics.paginator.count|pluralize }}</p>{% include 'scholars/start_form.html' with label='Practice selected category / subcategory' %}</div><p class="muted">Practice uses the category and subcategory filters. Open a topic to practice just that topic.</p><div class="topic-grid">{% for topic in topics %}<a class="list-card" href="{% url 'scholars:topic' topic.pk %}"><span class="eyebrow">{{ topic.category_id }}</span><strong>{{ topic.title }}</strong><span>{{ topic.payload.description|truncatewords:20 }}</span></a>{% empty %}<p>No matching topics. Try a broader search.</p>{% endfor %}</div>{% include 'pagination.html' with page=topics %}{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Library · Scholars Bowl{% endblock %}
+{% block content %}
+<h1>Library</h1>
+<form method="get" class="filters">
+  <div><label for="query">Search</label><input id="query" type="search" name="q" value="{{ query }}" maxlength="100"></div>
+  <div><label for="category">Category</label><select id="category" name="category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c.pk }}" {% if category == c.pk %}selected{% endif %}>{{ c.pk }}</option>{% endfor %}</select></div>
+  <div><label for="subcategory">Subcategory</label><select id="subcategory" name="subcategory"><option value="">All subcategories</option>{% for s in subcategories %}<option value="{{ s.pk }}" {% if subcategory == s.pk %}selected{% endif %}>{{ s.payload.label }}</option>{% endfor %}</select></div>
+  <div><label for="status">Status</label><select id="status" name="status"><option value="">All topics</option><option value="unstudied" {% if status == 'unstudied' %}selected{% endif %}>Unstudied</option><option value="studied" {% if status == 'studied' %}selected{% endif %}>Studied</option><option value="practiced" {% if status == 'practiced' %}selected{% endif %}>Practiced</option></select></div>
+  <div class="actions"><button>Search</button><a href="{% url 'scholars:library' %}">Clear</a></div>
+</form>
+<div class="section-heading"><p>{{ topics.paginator.count }} topic{{ topics.paginator.count|pluralize }}</p>{% if topics.paginator.count %}{% include 'scholars/start_form.html' with label='Practice these topics' %}{% endif %}</div>
+<div class="topic-list">
+{% for topic in topics %}
+  <article class="topic-row"><div><h2><a href="{% url 'scholars:topic' topic.pk %}">{{ topic.title }}</a></h2><p class="muted">{{ topic.category_id }}</p><p>{{ topic.payload.description|truncatewords:24 }}</p></div><div class="statuses">{% if topic.studied %}<span class="tag">Studied</span>{% endif %}{% if topic.practiced %}<span class="tag neutral">Practiced</span>{% endif %}</div></article>
+{% empty %}<p>No matching topics.</p>{% endfor %}
+</div>
+{% include 'pagination.html' with page=topics %}
+{% endblock %}

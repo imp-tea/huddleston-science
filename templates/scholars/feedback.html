@@ -1,1 +1,10 @@
-{% extends 'base.html' %}{% block content %}<div class="quiz"><p class="eyebrow">QUESTION {{ item.position }} OF {{ session.total }} · ANSWER SAVED</p><h1 role="status">{% if item.is_correct %}That’s right.{% else %}One to remember.{% endif %}</h1><div class="panel"><h2>{{ item.revision.payload.question }}</h2>{% include 'scholars/answer_detail.html' %}</div><a class="button" href="{% url 'scholars:session' session.pk %}">{% if session.completed_at %}See results{% else %}Continue{% endif %} →</a></div>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Answer · Scholars Bowl{% endblock %}
+{% block content %}<div class="quiz"><p class="muted">Question {{ item.position }} of {{ session.total }}</p>
+<progress value="{{ session.answered }}" max="{{ session.total }}" aria-label="Questions answered"></progress>
+<h1 class="question">{{ item.revision.payload.question }}</h1>
+{% include 'scholars/answer_status.html' %}
+{% include 'scholars/answer_detail.html' %}
+{% if item.review_due_on %}<p class="muted">Next review: {{ item.review_due_on|date:'M j, Y' }}{% if item.attempt_kind == 'same_day' %} · Same-day retry{% elif item.attempt_kind == 'early' %} · Early practice{% endif %}</p>{% elif item.attempt_kind == 'historical' %}<p class="muted">Saved with the original content. Review scheduling uses the current version.</p>{% endif %}
+{% if item.corrected_previous_miss %}<p class="muted">Previously missed; correct this time.</p>{% endif %}
+<a class="button" href="{% url 'scholars:session' session.pk %}">{% if session.completed_at %}See results{% else %}Continue{% endif %}</a></div>{% endblock %}

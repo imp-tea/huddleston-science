@@ -5,7 +5,7 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(os.environ.get("DJANGO_ENV_FILE", BASE_DIR / ".env"))
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY or SECRET_KEY == "replace-with-a-random-secret":
     raise ImproperlyConfigured("Set a random DJANGO_SECRET_KEY in .env; see README.md.")
@@ -64,5 +64,5 @@ SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 # Never print request bodies, passwords, or student data in application logs.
 LOGIN_ACCOUNT_LIMIT = 10
-LOGIN_NETWORK_LIMIT = 50
+LOGIN_NETWORK_LIMIT = 160  # Allow a class of 32 to sign in behind one school network.
 LOGIN_WINDOW_SECONDS = 900

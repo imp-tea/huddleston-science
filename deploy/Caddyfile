@@ -1,0 +1,25 @@
+{
+	log default {
+		exclude http.log.error
+	}
+}
+
+huddleston.science {
+	encode zstd gzip
+	handle_path /static/* {
+		root * /srv/huddleston/static
+		header X-Content-Type-Options nosniff
+		file_server
+	}
+	handle {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up -X-Forwarded-For
+		}
+	}
+	# Access logging is intentionally disabled (no `log` directive).
+}

@@ -1,6 +1,6 @@
 # Huddleston Science website plan
 
-Status: Overall direction approved by the repository owner. Milestone 1 is implemented and validated locally; deployment remains deferred.
+Status: Overall direction approved by the repository owner. Milestones 1–3 are implemented and validated locally; live deployment and the owner-led student pilot remain deferred.
 Date: September 22, 2026
 
 ## Purpose
@@ -24,9 +24,9 @@ The owner has a DigitalOcean droplet reserved for the site and has pointed `hudd
 
 Accounts and learning records are pseudonymous, not literally data-free. Keep them private to their owner and the administrator. Any mapping from accounts to real student names stays outside the site. Avoid unnecessary analytics and sensitive request logging.
 
-## Existing repository baseline
+## Original repository baseline (before Milestone 1)
 
-The current site is static: plain JavaScript, HTML, CSS, and Python build/validation scripts. There is no backend, database, or authentication.
+At planning time, the site was static: plain JavaScript, HTML, CSS, and Python build/validation scripts. There was no backend, database, or authentication.
 
 - `src/app.js`: category/subcategory/topic navigation using URL hashes.
 - `src/topic.js`: topic descriptions, detailed study content, and source questions.
@@ -95,11 +95,11 @@ Track enough information to distinguish first attempts, retries, recognition, se
 
 ## Game-like feedback
 
-Default to private individual progress until the owner chooses otherwise. Student age range, expected account count, and appetite for competition remain unspecified; these need not block foundational implementation.
+Default to private individual progress until the owner chooses otherwise. Students are ages 12–18, with classes of at most 32. Keep the visual tone simple and functional: compact headings, no hero sections or slogans, and instructions only when needed. Use meaningful controls and labels rather than decorative text. No public competition has been requested. Class size does not impose a site-wide account limit.
 
 Initial features:
 
-- Consistent category colors/icons and a polished visual identity.
+- A restrained, consistent interface; decorative category colors/icons are omitted in accordance with the owner’s September 22 visual direction.
 - Responsive answer feedback and restrained celebrations.
 - Visible session progress and a clear finish line.
 - Personal best celebrations and useful summaries such as previously missed answers remembered.
@@ -172,7 +172,7 @@ Validated:
 - Full-dataset import run twice in tests, checking exact content and attribution preservation, taxonomy and membership equality, and original counts: 12 categories, 355 subcategories, 7,072 topics / 6,906 subjects, 1,006 detailed pages, 10,976 questions, 4,383 source units, and 13 redirects.
 - Original static build/content and JavaScript quiz tests are retained and pass. Final test totals and browser verification are recorded in the milestone validation note below.
 
-Deferred:
+Deferred at Milestone 1 completion (see Milestone 2 below):
 
 - Study visit/marked-studied tracking, category/subcategory progress aggregates, personal bests, review readiness/scheduling, recall mode, rewards/XP/badges/goals, and richer game feedback. No mastery inference or rewards are applied to these recognition results.
 - Incomplete sessions are retained as resumable sessions; explicit abandonment/expiry policy remains deferred. Each new session is separate, without yet interpreting repeated questions as scheduled recall evidence.
@@ -201,6 +201,27 @@ Acceptance checks:
 
 ### Milestone 2: Engaging practice
 
+**Implementation status — September 22, 2026:** Implemented locally, including the owner's age/class-size and simple-interface direction. Milestone 1 data and authentication remain intact; the schema update is additive.
+
+Implemented:
+
+- Compact shared navigation and pages, with hero text, slogans, decorative labels, and unnecessary instructions removed. Plain feedback, visible keyboard focus, semantic forms, and 320px layouts work without JavaScript; no animations are required.
+- Dashboard actions for starting/resuming practice and a short list of topics whose latest current-revision answer was incorrect.
+- Title/alias search and category/subcategory/studied/practiced library filters. Quiz selection uses the same filters across all matching topics, including matches on other pages.
+- Persistent first/last topic visits and explicit, reversible studied markers. Viewing or practicing never marks a topic studied, and shared subjects do not grant progress to other topic IDs.
+- Private category/subcategory studied/practiced coverage and 30-day accuracy with denominators. Overlapping subcategories do not inflate category totals. Historical answers use their saved classifications; retired topics leave current coverage denominators.
+- Personal bests grouped by scope/filters, recognition mode, denominator, and eligible question-bank revision fingerprint. Only completed sessions qualify. Small quizzes, changed content, and different modes remain separate. Milestone 1 sessions retain results without inventing a missing original-bank fingerprint.
+- Persistent answer explanations and source links; modest personal-best labels and same-revision previously-missed/correct-this-time feedback.
+- Atomic participation XP: first-ever question attempt earns 2, the first attempt on a later local day earns 1, same-day repeats earn 0. Correctness is independent. Database uniqueness and account/session locks prevent duplicate rewards, including across concurrent sessions. No retroactive XP is awarded.
+- Optional weekly goals (off by default; 10/20/30/50/100 distinct questions, Monday–Sunday in America/Chicago). Counts include saved answers from incomplete sessions. No streaks or penalties.
+- Administrator read-only student progress and a shared-network login allowance sized for 32 students (160 network attempts per 15 minutes; username limit stays 10).
+
+**Validated:** 70 PostgreSQL/Django tests, 5 original Python content/build tests, and 3 original JavaScript tests pass. Tests include overlapping memberships, privacy, shared-subject separation, first/repeat XP rules, calendar boundaries, concurrent answers, rollback, repeat-import preservation of new progress, comparable personal bests, and 32 students signing in twice from one network. System checks, migration drift checks, and `git diff --check` pass. Chrome browser validation completed study marking, filtered practice, a 0/3 → 3/3 personal-best improvement, nonduplicated XP, goal editing, and persistence in a second mobile session. Core actions work with JavaScript disabled, keyboard input, reduced motion, and a 320px viewport. Desktop/mobile screenshots were inspected. Exact rules and upgrade commands are in `README.md`.
+
+The additive migration has been applied locally. No Milestone 2 implementation blocker remains. No deployment has occurred.
+
+Deferred to Milestone 3 or later: scheduled reviews/readiness, self-assessed recall, review-based badges, standardized challenge mode, production deployment/operations, and student-pilot feedback. Category icons and animated celebrations are intentionally omitted under the owner's simpler visual direction.
+
 Deliver the dashboard, searchable/browsable library, explicit study markers, better feedback, progress summaries, comparable personal bests, and initial visual/reward polish.
 
 Acceptance checks:
@@ -212,6 +233,23 @@ Acceptance checks:
 - Core flows work on narrow screens and using a keyboard; animations respect reduced motion.
 
 ### Milestone 3: Personalization and launch preparation
+
+**Implementation status — September 22, 2026:** Implemented locally. The additive migration is applied; existing content, accounts, history, and Milestone 2 work are preserved. No live deployment or student pilot has occurred.
+
+Implemented:
+
+- Per-student, per-question-revision, per-mode review schedules with documented calendar-day intervals of 1/3/7/14/30 days. Mistakes reset to tomorrow; early successes and same-day retries do not advance evidence. A first success plus two successful due reviews on separate days qualifies only that association as remembered across reviews. Review due remains a separate indicator.
+- Personalized practice (up to 4 due / 3 weak / 3 new questions, filling short groups), random practice, and due-only selection, all respecting existing topic/category/subcategory/search/status scope. Empty due selections report a clear next step.
+- Self-assessed recall with server-persisted reveal before assessment, separate assessment fields and review evidence, explicit Continue, resumable revealed cards, and no objective-score/personal-best inflation. Both modes share stable-question participation limits.
+- Current-revision readiness, category/subcategory due and remembered counts, separate objective/self-assessed 30-day results, scheduled versus same-day attempts, and upcoming reviews. Overlapping memberships do not double-count category totals. Historic answers pin content and next-review snapshots; prior answers are not speculatively backfilled into the scheduler.
+- Explicit session ending preserves completed answers, review evidence, and XP; ended sessions cannot resume or enter bests. Only completed random recognition sets qualify for comparable scored records.
+- Production settings, loopback-only Gunicorn, Caddy HTTPS/static/proxy configuration, private logs, systemd app/backup/housekeeping services and timers, snapshot-consistent custom-format backups, and an isolated restore command that verifies all table counts/checksums and administrator protection before removing its own temporary database.
+- `DEPLOYMENT.md` documents prerequisite server inspection, persistent storage/secrets, installation, HTTPS, backups and off-server requirements, restore drills/disaster recovery, schema-aware code rollback versus data restoration, and an owner-led student pilot. No server details or credentials were invented.
+
+**Validated:** 101 Django/PostgreSQL/operations tests, 5 original Python tests, and 3 JavaScript tests passed. System checks, migration drift checks, and `git diff --check` passed. Browser validation covered keyboard recall, cross-device reveal persistence, separate scores, due-only practice, ended sessions, reduced motion, no JavaScript, and 320px layouts with screenshots reviewed. Gunicorn 26.2.0 and Caddy 2.11.4 passed local TLS/proxy/cookie/CSRF/static tests. Production checks show only the intentional HSTS subdomain/preload warnings. Full-corpus and populated student-fixture restore drills matched all 24 public tables and preserved the administrator trigger. Exact learning rules and validation details are in `README.md`; production procedures are in `DEPLOYMENT.md`.
+
+**Deferred to rollout:** Actual droplet inspection and installation, public DNS/ACME/firewall checks, Linux service/timer execution, encrypted off-server backup destination/retention/alerts, and the student pilot require the server and owner readiness. Configuration and local drills are complete; production operation is not claimed. Review badges and standardized challenge mode remain later features, outside this milestone's required deliverables.
+
 
 Deliver review scheduling, self-assessed recall mode, more informative progress summaries, deployment configuration/documentation, and a small student pilot when the owner is ready.
 
@@ -229,7 +267,7 @@ The droplet can run the application and PostgreSQL behind an HTTPS reverse proxy
 
 Read this plan, `README.md`, and applicable `AGENTS.md` instructions before changes. Inspect the repository rather than assuming the planning baseline is still current. Preserve unrelated work.
 
-Begin with Milestone 1. Complete and test the vertical slice before spreading effort across rewards, dashboards, and review algorithms. Avoid a wholesale rewrite of educational content or unrelated tooling. Make ordinary implementation choices autonomously and document material deviations or blockers.
+Work in milestone order and preserve the locally completed Milestones 1–3. Consult their implementation and deferred-work notes before starting a later change. Avoid a wholesale rewrite of educational content or unrelated tooling. Make ordinary implementation choices autonomously and document material deviations or blockers.
 
 Retain appropriate existing tests and add meaningful coverage for authentication/authorization, persistence, import safety, scoring, and duplicate submissions. Run the relevant checks and report actual results. Update `README.md` to replace obsolete static-only setup claims once the backend exists. Update milestone status in this document as work lands, explicitly distinguishing implemented, tested, and deferred features.
 

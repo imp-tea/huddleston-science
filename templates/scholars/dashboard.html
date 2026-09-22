@@ -1,1 +1,16 @@
-{% extends 'base.html' %}{% block title %}Scholars Bowl · Huddleston Science{% endblock %}{% block content %}<p class="eyebrow">SCHOLARS BOWL / YOUR STUDY SPACE</p><h1>Small sessions.<br>Lasting connections.</h1><p class="lede">A few questions today. A little more at your fingertips tomorrow.</p><div class="columns"><section class="section-card"><p class="eyebrow">READY WHEN YOU ARE</p><h2>Put your knowledge to work.</h2><p>Up to 10 multiple-choice questions across the library. Every answer is saved as you go.</p>{% if has_content %}{% include 'scholars/start_form.html' with label='Start mixed practice →' %}{% else %}<p role="status">The library is being prepared. Ask your administrator to import the educational content.</p>{% endif %}</section><section class="panel"><p class="eyebrow">FOLLOW YOUR CURIOSITY</p><h2>Explore the library</h2><p>Find a topic, read its study notes, and practice a subject of your choice.</p><a class="button secondary" href="{% url 'scholars:library' %}">Browse topics →</a></section></div><div class="section-heading"><h2>Pick up your progress</h2><a href="{% url 'scholars:history' %}">All results →</a></div>{% include 'scholars/session_list.html' %}{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Scholars Bowl · Huddleston Science{% include 'scholars/review_summary.html' %}
+{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Scholars Bowl</h1><span class="muted">{{ participation.xp }} XP</span></div>
+<div class="actions">
+  {% if resume %}<a class="button" href="{% url 'scholars:session' resume.pk %}">Resume practice ({{ resume.answered }}/{{ resume.total }})</a>{% endif %}
+  {% if has_content %}{% include 'scholars/start_form.html' with label='Start practice' %}{% else %}<p>No questions have been imported yet.</p>{% endif %}
+  <a href="{% url 'scholars:library' %}">Browse topics</a>
+</div>
+{% if participation.weekly_goal %}<p class="muted">This week: {{ participation.weekly_count }} / {{ participation.weekly_goal }} questions</p>{% endif %}
+<div class="section-heading"><h2>Recent practice</h2><a href="{% url 'scholars:history' %}">All results</a></div>
+{% include 'scholars/session_list.html' %}
+{% if missed_topics %}<h2>Topics to revisit</h2><ul class="plain-list">{% for topic in missed_topics %}<li><a href="{% url 'scholars:topic' topic.pk %}">{{ topic.title }}</a></li>{% endfor %}</ul>{% endif %}
+{% include 'scholars/review_summary.html' %}
+{% endblock %}

@@ -1,0 +1,21 @@
+[Unit]
+Description=Huddleston Science application
+After=network.target postgresql.service
+
+[Service]
+User=huddleston
+Group=huddleston
+WorkingDirectory=/srv/huddleston/current
+EnvironmentFile=/etc/huddleston/site.env
+Environment=DJANGO_ENV_FILE=/etc/huddleston/site.env
+ExecStart=/srv/huddleston/current/.venv/bin/gunicorn --config deploy/gunicorn.conf.py classroom.wsgi:application
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

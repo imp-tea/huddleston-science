@@ -189,6 +189,13 @@ class AccountTests(TestCase):
         self.client.force_login(self.other)
         self.assertIn("no-store", self.client.get(reverse("account"))["Cache-Control"])
 
+    def test_class_of_32_can_sign_in_twice_on_one_school_network(self):
+        for number in range(32):
+            user = User.objects.create_user(f"classmate-{number}", NEW_PASSWORD, must_change_password=False)
+            for _ in range(2):
+                response = Client().post(reverse("login"), {"username": user.username, "password": NEW_PASSWORD})
+                self.assertEqual(response.status_code, 302)
+
 
 class BootstrapTests(TestCase):
     def test_bootstrap_prompts_and_creates_exactly_one_administrator(self):

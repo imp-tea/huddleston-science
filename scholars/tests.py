@@ -57,7 +57,7 @@ class PracticeTests(TestCase):
         self.assertEqual(session.answered, 10)
         self.assertIsNotNone(session.completed_at)
         self.assertEqual(self.other.practice_sessions.count(), 0)
-        self.assertContains(self.client.get(reverse("scholars:results", args=[session.pk])), "Session complete.")
+        self.assertContains(self.client.get(reverse("scholars:results", args=[session.pk])), "Session complete")
 
     def test_small_scope_uses_actual_denominator_and_preserves_choice_permutation(self):
         topic = Topic.objects.first()
@@ -145,7 +145,7 @@ class PracticeTests(TestCase):
         browser.post(reverse("students"), {"username": "new-scholar", "password": "Temporary-journey-839!"})
         browser.post(reverse("logout"))
         response = browser.post(reverse("login"), {"username": "new-scholar", "password": "Temporary-journey-839!"}, follow=True)
-        self.assertContains(response, "Make this account yours.")
+        self.assertContains(response, "Change temporary password")
         browser.post(reverse("password_change"), {"old_password": "Temporary-journey-839!", "new_password1": PASSWORD, "new_password2": PASSWORD})
         original_id = User.objects.get(username="new-scholar").pk
         browser.post(reverse("scholars:start"), {"request_key": uuid.uuid4(), "topic": Topic.objects.first().pk})
@@ -158,7 +158,7 @@ class PracticeTests(TestCase):
         device = Client()
         device.post(reverse("login"), {"username": "renamed-scholar", "password": PASSWORD})
         response = device.get(reverse("scholars:results", args=[session.pk]))
-        self.assertContains(response, "Session complete.")
+        self.assertContains(response, "Session complete")
         self.assertEqual(User.objects.get(username="renamed-scholar").pk, original_id)
         self.assertEqual(session.score, session.total)
         self.assertEqual(session.answered, session.total)

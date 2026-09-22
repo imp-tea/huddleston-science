@@ -55,7 +55,7 @@ def account(request):
         except IntegrityError:
             form.add_error("username", "This username is already in use.")
         else:
-            messages.success(request, "Username updated. Your account code and results stay the same.")
+            messages.success(request, "Username updated.")
             return redirect("account")
     return render(request, "accounts/account.html", {"form": form})
 
@@ -72,7 +72,7 @@ def password_change(request):
             user.must_change_password = False
             user.save(update_fields=["password", "must_change_password"])
             update_session_auth_hash(request, user)
-            messages.success(request, "Your password is updated. You’re ready to practice.")
+            messages.success(request, "Password updated.")
             return redirect("scholars:dashboard")
     return render(request, "accounts/password_change.html", {"form": form})
 

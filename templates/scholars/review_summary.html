@@ -1,0 +1,14 @@
+<section><h2>Review readiness</h2>
+<p class="muted">Question associations, not whole-topic mastery. Each mode has its own schedule.</p>
+{% for review in reviews %}
+<h3>{{ review.label }}</h3>
+<p>{{ review.total.due }} due · {{ review.total.remembered }} / {{ review.total.questions }} remembered across reviews · {{ review.total.practicing }} practicing · {{ review.total.new }} new to reviews</p>
+{% if show_history %}
+<p class="muted">Last 30 days: {{ review.recent_successes }} / {{ review.recent_answers }} {% if review.mode == 'recall' %}self-assessed remembered{% else %}correct{% endif %}. {{ review.scheduled_answers }} scheduled reviews; {{ review.repeat_answers }} same-day retries.</p>
+{% if not category %}<details><summary>By category</summary>{% else %}<details><summary>By subcategory</summary>{% endif %}
+<div class="table-wrap"><table><thead><tr><th scope="col">Scope</th><th scope="col">Due</th><th scope="col">Remembered <small>across reviews</small></th></tr></thead><tbody>{% for key,row in review.rows.items %}<tr><th scope="row">{{ row.label }}</th><td>{{ row.due }}</td><td>{{ row.remembered }} / {{ row.questions }}</td></tr>{% empty %}<tr><td colspan="3">No current questions.</td></tr>{% endfor %}</tbody></table></div></details>
+{% for state in review.upcoming %}<div class="study-row"><a href="{% url 'scholars:topic' state.revision.question.topic_id %}">{{ state.revision.context.topic.topic }}</a><span>Review {{ state.due_on|date:'M j, Y' }}</span></div>{% endfor %}
+{% endif %}
+{% endfor %}
+<details><summary>How reviews work</summary><p>Successful reviews on separate days advance through 1, 3, 7, 14, and 30 days. Mistakes reset the interval to 1 day. Early successes and same-day retries do not advance it. A first success followed by two successful due reviews on separate days qualifies as remembered across reviews. Changed questions start fresh. Dates use America/Chicago.</p></details>
+</section>
