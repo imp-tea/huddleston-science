@@ -21,7 +21,10 @@ class BuildTests(unittest.TestCase):
 
     def test_migration_counts(self):
         expected=json.loads((ROOT/'data/import-manifest.json').read_text())['counts']
-        self.assertEqual({k:self.stats[k] for k in expected},expected)
+        # The manifest records the original import, before researched additions.
+        self.assertGreaterEqual(self.stats['detailed_pages'],expected['detailed_pages'])
+        self.assertEqual({k:self.stats[k] for k in expected if k != 'detailed_pages'},
+                         {k:v for k,v in expected.items() if k != 'detailed_pages'})
 
     def test_topic_and_practice_exports_preserve_final_data(self):
         details={};questions=[]

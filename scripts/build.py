@@ -48,9 +48,23 @@ def load_and_validate(data_dir=None):
     require(set(content) <= topic_map.keys(), 'Unknown content topic')
     for tid, c in content.items():
         require(bool(c['overview']) and bool(c['key_facts']), f'Empty study page: {tid}')
-        for source in c['source'].get('references', [c['source']]):
-            require(all(source.get(k) for k in ['title', 'url', 'publisher', 'license', 'license_url']), f'Missing attribution: {tid}')
-            require(all(source[k].startswith(('https://', 'http://')) for k in ['url','license_url']), f'Invalid citation URL: {tid}')
+        references = c['source'].get('references', [c['source']])
+        require(bool(references), f'Missing study sources: {tid}')
+        for source in references:
+            require(all(source.get(k) for k in ['title', 'url', 'publisher']), f'Missing attribution: {tid}')
+            require(source['url'].startswith(('https://', 'http://')), f'Invalid citation URL: {tid}')
+            # An original factual summary may cite a copyrighted source without
+            # asserting that the source has a reusable-content license.
+            require(bool(source.get('license')) == bool(source.get('license_url')), f'Incomplete source license: {tid}')
+            if source.get('license_url'):
+                require(source['license_url'].startswith(('https://', 'http://')), f'Invalid license URL: {tid}')
+        urls = {source['url'] for source in references}
+        blocks = c['overview'] + c['key_facts']
+        require(len({b['id'] for b in blocks}) == len(blocks), f'Duplicate study block ID: {tid}')
+        for block in blocks:
+            require(isinstance(block.get('text'), str) and block['text'].strip(), f'Empty study block: {tid}')
+            if 'source_urls' in block:
+                require(bool(block['source_urls']) and set(block['source_urls']) <= urls, f'Unknown block citation: {tid}')
     require(all(target in topic_map and old not in topic_map for old, target in redirects.items()), 'Invalid redirect')
     require(len({q['question_id'] for q in practice}) == len(practice), 'Duplicate practice question')
     counts = Counter(); topic_answers = set()

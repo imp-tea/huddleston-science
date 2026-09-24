@@ -79,7 +79,9 @@ python manage.py import_content
 
 The importer reuses `scripts/build.py` validation before writing, then imports in one PostgreSQL transaction with an advisory lock. It preserves all original payloads, stable `study_topic_id`, `subject_id`, globally unique `question_id`, subcategory IDs, source references, redirects, study prose, revision metadata, and attribution. Topic-local IDs such as `q1` are never persistence keys. Import counts are recorded in `ContentImport`.
 
-Current inventory: 12 categories, 355 subcategories, 7,072 category-specific topics, 6,906 shared subjects, 1,006 detailed study pages, 10,976 questions, 4,383 tournament source units, and 13 redirects.
+Original import inventory: 12 categories, 355 subcategories, 7,072 category-specific topics, 6,906 shared subjects, 1,006 detailed study pages, 10,976 questions, 4,383 tournament source units, and 13 redirects.
+
+The remaining 6,066 study pages are being enriched in small, internet-researched GPT-6 Sol batches. Accepted additions live in `data/content.json`; original study pages and questions are preserved. Run `python3 scripts/enrich_topics.py status` for current coverage. [Research instructions and review records](research/topic-enrichment/README.md) document the resumable queue, source evidence, validation, and local imports.
 
 Repeated imports update current content without duplicating questions or deleting progress. Changes to a question, its topic/context, study notes, or source attribution create a new immutable-by-import question revision. Sessions pin the revision and shuffled choices at creation. Saved answers and even unfinished sessions keep the original text, correct answer, explanation, classifications, and attribution after an update. Historical **Sources for this question** displays that snapshot; **Study [topic]** opens the current study page.
 

@@ -5,9 +5,9 @@ function studyContent(c) {
   const sources = source.references || [source];
   const citations = sources.map(s => {
     const revisionURL = s.revision?.revid ? `https://en.wikipedia.org/w/index.php?oldid=${encodeURIComponent(s.revision.revid)}` : new URL(s.url).href;
-    return `${link(s.title,revisionURL)} · ${esc(s.publisher)} · ${link(s.license,s.license_url)}`;
+    return `${link(s.title,revisionURL)} · ${esc(s.publisher)}${s.license && s.license_url ? ` · ${link(s.license,s.license_url)}` : ''}`;
   }).join('<br>');
-  return `<h2>Overview</h2>${c.overview.map(b => `<p class="description">${esc(b.text)}</p>`).join('')}<h2>Key facts</h2><ul class="facts">${c.key_facts.map(b => `<li>${esc(b.text)}</li>`).join('')}</ul><p class="muted">${sources.length > 1 ? 'Sources' : 'Source'}: ${citations}. Adapted summary.</p>`;
+  return `<h2>Overview</h2>${c.overview.map(b => `<p class="description">${esc(b.text)}</p>`).join('')}<h2>Key facts</h2><ul class="facts">${c.key_facts.map(b => `<li>${esc(b.text)}</li>`).join('')}</ul><p class="muted">${sources.length > 1 ? 'Sources' : 'Source'}: ${citations}.</p>`;
 }
 
 export function topicHTML(t,params,corpus,subcategories) {

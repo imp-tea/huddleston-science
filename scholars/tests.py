@@ -239,6 +239,33 @@ class ImportTests(TestCase):
         self.assertNotEqual(question.current_revision_id, revision.pk)
         self.assertNotEqual(revision.context["sources"][sid]["source"], "Updated source attribution")
 
+    def test_enriched_notes_preserve_inflight_revision_and_render_unlicensed_citation(self):
+        question = Question.objects.first()
+        session = recognition_session(self.user, uuid.uuid4(), {"topic": question.topic_id})
+        item = session.items.select_related("revision").first()
+        original_context = item.revision.context
+        study = {
+            "overview": [{"id": "o1", "text": "An original researched overview.", "source_urls": ["https://example.org/study"]}],
+            "key_facts": [{"id": "f1", "text": "A supported study fact.", "source_urls": ["https://example.org/study"]}],
+            "source": {"references": [{"title": "Research source", "publisher": "Source publisher", "url": "https://example.org/study"}]},
+        }
+        self.data["content.json"][question.topic_id] = study
+        self.write("content.json", self.data["content.json"])
+        import_content(self.path)
+        question.refresh_from_db()
+        item.refresh_from_db()
+        self.assertNotEqual(question.current_revision_id, item.revision_id)
+        self.assertEqual(item.revision.context, original_context)
+        self.assertEqual(question.current_revision.context["study_content"], study)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("scholars:topic", args=[question.topic_id]))
+        self.assertContains(response, "An original researched overview.")
+        self.assertContains(response, "A supported study fact.")
+        self.assertContains(response, 'href="https://example.org/study"')
+        self.assertNotContains(response, 'href=""')
+        import_content(self.path)
+        self.assertEqual(Question.objects.get(pk=question.pk).current_revision_id, question.current_revision_id)
+
     def test_invalid_import_does_not_modify_database(self):
         self.data["practice/01.json"][0]["evidence_ids"] = ["missing-evidence"]
         self.write("practice/01.json", self.data["practice/01.json"])
@@ -308,7 +335,9 @@ class FullContentTests(TestCase):
         root = settings.BASE_DIR / "data"
         counts = import_content(root)
         expected = json.loads((root / "import-manifest.json").read_text())["counts"]
-        self.assertEqual({key: counts[key] for key in expected}, expected)
+        self.assertGreaterEqual(counts["detailed_pages"], expected["detailed_pages"])
+        self.assertEqual({key: counts[key] for key in expected if key != "detailed_pages"},
+                         {key: value for key, value in expected.items() if key != "detailed_pages"})
         self.assertEqual(counts["subjects"], 6906)
         self.assertEqual(import_content(root), counts)
         self.assertEqual(QuestionRevision.objects.count(), 10976)
