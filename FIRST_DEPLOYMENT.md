@@ -99,7 +99,7 @@ Enter the password you just chose. It should print `root`. From here onward, use
 ```sh
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y git python3 python3-venv python3-pip postgresql postgresql-client curl gnupg ufw debian-keyring debian-archive-keyring apt-transport-https
+sudo apt install -y python3 python3-venv python3-pip postgresql postgresql-client curl gnupg ufw debian-keyring debian-archive-keyring apt-transport-https
 sudo systemctl enable --now postgresql
 ```
 
@@ -137,7 +137,25 @@ If a DigitalOcean Cloud Firewall is attached, allow inbound TCP 22 from your cur
 
 Your domain's A record was checked on September 22, 2026 and already resolves to `206.189.230.160`; no AAAA answer was returned. You do not need a `www` record for the supplied configuration, which serves `huddleston.science`.
 
-## 5. Create the application directories and download the code
+## 5. Create and upload a production package
+
+Commit the reviewed cleanup/application changes in GitHub Desktop first. The
+packager uses committed files, so changes that have not been committed will not
+be included. It creates the production subset without Git history, research
+logs, tests, local credentials, or the old static site.
+
+**Mac — in a separate Terminal window, keeping the SSH session open:**
+
+```sh
+cd ~/Desktop/huddleston-science
+release_id=$(git rev-parse --short=12 HEAD)
+python3 scripts/package_release.py --ref HEAD --output ".local/releases/huddleston-$release_id.tar.gz"
+scp -i ~/.ssh/id_ed25519 ".local/releases/huddleston-$release_id.tar.gz" adam@206.189.230.160:/home/adam/huddleston-release.tar.gz
+```
+
+The packager prints the archive's hash, size, and source commit. An existing
+output is not overwritten; reuse the previously verified archive or choose a
+new filename. The archive contains `RELEASE.json` with hashes of every file.
 
 **Droplet:**
 
@@ -149,14 +167,17 @@ sudo install -d -o huddleston -g huddleston -m 755 /srv/huddleston/static
 sudo install -d -o root -g huddleston -m 750 /etc/huddleston
 sudo install -d -o huddleston -g huddleston -m 700 /var/backups/huddleston
 umask 022
-git clone https://github.com/imp-tea/huddleston-science.git /srv/huddleston/releases/first-release
+mkdir /srv/huddleston/releases/first-release
+tar -xzf /home/adam/huddleston-release.tar.gz -C /srv/huddleston/releases/first-release
 cd /srv/huddleston/releases/first-release
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-production.txt
 sudo ln -s /srv/huddleston/releases/first-release /srv/huddleston/current
 ```
 
-The repository is publicly reachable over HTTPS, so this clone does not need your Mac's SSH key or a GitHub token. The code belongs to your operator account; the background web account can read it but cannot edit it.
+The server does not need a GitHub login or a repository clone. The uploaded code
+belongs to your operator account; the background web account can read it but
+cannot edit it. Production secrets are configured separately in step 7.
 
 `current` is a shortcut to the active release. This lets later updates use a new release directory while keeping the database outside the code directory. If you reconnect later, return here with:
 
@@ -347,4 +368,4 @@ sudo journalctl -u caddy -n 50 --no-pager
 
 `502 Bad Gateway` usually means Caddy is reachable but cannot get a working response from Gunicorn. A connection timeout usually points to networking/firewall/DNS. A database password error means checking the password in step 7 against the one entered in step 6; reinstalling the application is not the fix.
 
-After this first deployment, use the update/rollback procedure in [DEPLOYMENT.md](DEPLOYMENT.md). Pushing to GitHub alone does not change the running droplet. Later releases need to be fetched, their dependencies/migrations checked, and the service restarted. Preserve the production environment file and persistent database when updating code.
+After this first deployment, use the update/rollback procedure in [DEPLOYMENT.md](DEPLOYMENT.md). Pushing to GitHub alone does not change the running droplet. Later releases need a new production package, their dependencies/migrations checked, and the service restarted. Preserve the production environment file and persistent database when updating code.

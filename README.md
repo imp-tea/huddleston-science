@@ -81,7 +81,7 @@ The importer reuses `scripts/build.py` validation before writing, then imports i
 
 Original import inventory: 12 categories, 355 subcategories, 7,072 category-specific topics, 6,906 shared subjects, 1,006 detailed study pages, 10,976 questions, 4,383 tournament source units, and 13 redirects.
 
-The remaining 6,066 study pages are being enriched in small, internet-researched GPT-6 Sol batches. Accepted additions live in `data/content.json`; original study pages and questions are preserved. Run `python3 scripts/enrich_topics.py status` for current coverage. [Research instructions and review records](research/topic-enrichment/README.md) document the resumable queue, source evidence, validation, and local imports.
+There are now 2,335 detailed study pages: the original 1,006, 390 GPT-6 Sol additions, and 939 GPT-6 Luna additions. All previously unenriched topics with at least two original tournament sources are complete; the remaining 4,737 each have one source. Accepted additions and their citations live in `data/content.json`. Run `python3 scripts/enrich_topics.py status` for current coverage. [Content maintenance](docs/CONTENT_WORKFLOW.md) explains the local-only research workspace and resumable queue. Raw responses, drafts, and review logs are retained locally under ignored `research/`, outside Git and production packages.
 
 Repeated imports update current content without duplicating questions or deleting progress. Changes to a question, its topic/context, study notes, or source attribution create a new immutable-by-import question revision. Sessions pin the revision and shuffled choices at creation. Saved answers and even unfinished sessions keep the original text, correct answer, explanation, classifications, and attribution after an update. Historical **Sources for this question** displays that snapshot; **Study [topic]** opens the current study page.
 
@@ -209,8 +209,14 @@ The largest category contains 5,549 answers. `node tests/typed-benchmark.js` mea
 - `templates/`, `static/`: shared navigation and responsive, server-rendered UI. Core flows work without JavaScript.
 - `data/`: authoritative taxonomy, topics, detailed notes, source units, practice questions, redirects, and original import manifest.
 - `src/`: preserved original JavaScript/HTML/CSS static interface.
-- `scripts/`: preserved content validation, static export, and static preview.
-- `tests/`: original dataset/build and JavaScript regression tests.
+- `scripts/`: content validation, release packaging, research tooling, static export, and static preview.
+- `tests/`: dataset/build, research-tooling, release-boundary, and JavaScript regression tests; they do not require the local research archive.
+- `docs/`: concise maintenance and repository/release guidance.
+
+The production server receives a package of committed application files, not the
+whole repository. Tests, research tooling, planning documents, and the legacy
+static interface remain useful in Git but are excluded from that package. See
+[repository boundaries and release packaging](docs/REPOSITORY_LAYOUT.md).
 
 ## Validation
 

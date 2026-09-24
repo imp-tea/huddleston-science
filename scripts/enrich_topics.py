@@ -181,6 +181,17 @@ def main():
     with locked():
         if args.action == 'init':
             initialize()
+        if not QUEUE.exists():
+            if args.action == 'status':
+                content = read(ROOT / 'data/content.json')
+                topics = read(ROOT / 'data/topics.json')
+                missing = [t for t in topics if t['study_topic_id'] not in content]
+                print(json.dumps({'queue_available': False, 'total_topics': len(topics),
+                                  'detailed_pages': len(content), 'remaining': len(missing),
+                                  'remaining_with_two_or_more_sources': sum(len(set(t['source_ids'])) >= 2 for t in missing),
+                                  'note': 'Research records are local-only. Restore the local research workspace to resume its history, or use init to start a new queue from current data.'}, indent=2))
+                return
+            parser.error('Local research queue is absent; restore research/topic-enrichment/ or explicitly use init for a new queue.')
         queue = read(QUEUE)
         if args.action in ('init', 'status'):
             states = Counter(b['status'] for b in queue['batches'])

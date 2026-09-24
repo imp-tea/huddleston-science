@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import io
 import json
 from pathlib import Path
 import shutil
@@ -16,6 +17,50 @@ from research_redaction import sanitize_record
 
 
 class EnrichmentTests(unittest.TestCase):
+    def setUp(self):
+        # Research logs are local-only. Build the queue fixture from versioned
+        # content so these tests also work in a fresh clone without research/.
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        run = Path(temporary.name)
+        content = enrichment.read(ROOT / 'data/content.json')
+        topics = enrichment.read(ROOT / 'data/topics.json')
+        tid, value = next((tid, value) for tid, value in content.items()
+                          if 80 <= len(value['overview'][0]['text'].split()) <= 150
+                          and 4 <= len(value['key_facts']) <= 6
+                          and 'references' in value['source'])
+        research = {'queries': ['fixture topic'], 'notes': 'Synthetic test evidence notes.',
+                    'sources': [{'url': ref['url'], 'supports': 'Fixture source support.'}
+                                for ref in value['source']['references']]}
+        result = {'batch_id': 'accepted-fixture', 'topics': {tid: value}, 'research': {tid: research}}
+        enrichment.validate_payload(result['topics'], result['research'], [tid])
+        enrichment.write(run / 'accepted-fixture-results.json', result)
+        missing = [topic['study_topic_id'] for topic in topics if topic['study_topic_id'] not in content]
+        batches = [{'batch_id': 'accepted-fixture', 'topic_ids': [tid], 'status': 'accepted',
+                    'result_sha256': enrichment.digest(result)}]
+        batches += [{'batch_id': f'pending-{i}', 'topic_ids': missing[i:i+10], 'status': 'pending'}
+                    for i in range(0, len(missing), 10)]
+        enrichment.write(run / 'queue.json', {
+            'baseline_content': {key: enrichment.digest(item) for key, item in content.items() if key != tid},
+            'batches': batches})
+        for name, value in [('RUN', run), ('QUEUE', run / 'queue.json')]:
+            change = patch.object(enrichment, name, value)
+            change.start()
+            self.addCleanup(change.stop)
+
+    def test_status_without_local_queue_reports_content_without_creating_research(self):
+        absent = enrichment.RUN / 'absent.json'
+        output = io.StringIO()
+        with patch.object(enrichment, 'QUEUE', absent), \
+                patch.object(sys, 'argv', ['enrich_topics.py', 'status']), \
+                patch('sys.stdout', output):
+            enrichment.main()
+        status = json.loads(output.getvalue())
+        self.assertFalse(status['queue_available'])
+        self.assertEqual(status['total_topics'], 7072)
+        self.assertEqual(status['detailed_pages'] + status['remaining'], 7072)
+        self.assertFalse(absent.exists())
+
     def test_luna_provenance_rejects_dirty_raw_and_redacted_result(self):
         with tempfile.TemporaryDirectory() as directory:
             raw_path = Path(directory) / 'raw.json'

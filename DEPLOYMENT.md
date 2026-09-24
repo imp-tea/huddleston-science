@@ -10,7 +10,7 @@ Use a dedicated unprivileged `huddleston` service account, with no interactive l
 
 | Location | Purpose / permissions |
 | --- | --- |
-| `/srv/huddleston/releases/<release-id>/` | Versioned application checkout and its own `.venv`; operator-owned, service-readable |
+| `/srv/huddleston/releases/<release-id>/` | Extracted production package and its own `.venv`; operator-owned, service-readable |
 | `/srv/huddleston/current` | Symlink to the active release |
 | `/srv/huddleston/static` | Collected assets, writable by `huddleston`, readable by Caddy; directory mode 755 |
 | `/etc/huddleston/site.env` | Secrets/configuration copied from `deploy/production.env.example`; root-owned, group `huddleston`, mode 640; parent 750 |
@@ -26,7 +26,26 @@ Generate independent application/database secrets with a trusted local password 
 
 ## First installation
 
-Prepare a reviewed release checkout at the paths above, install its virtual environment, and point `current` at it. The application code must not be writable by the running web process. From that checkout:
+On the development machine, commit the reviewed changes and create a production
+package:
+
+```sh
+release_id=$(git rev-parse --short=12 HEAD)
+python3 scripts/package_release.py --ref HEAD \
+  --output ".local/releases/huddleston-$release_id.tar.gz"
+```
+
+The packager reads the selected committed revision and includes only runtime,
+content-import, and operational files. It excludes `.git`, raw research, tests,
+development settings, the legacy static interface, and local secrets. Each
+archive includes `RELEASE.json` identifying its source commit and file hashes.
+It does not install or deploy anything. Keep research and development records on
+the maintenance machine; no full repository clone is needed on the server.
+
+Transfer that archive over the existing trusted SSH connection and extract it
+into a new, empty release directory at the paths above. Install its virtual
+environment and point `current` at it. The application code must not be writable
+by the running web process. From the extracted release:
 
 ```sh
 python3 -m venv .venv
@@ -95,7 +114,7 @@ For actual disaster recovery, provision a fresh PostgreSQL database/role, restor
 Application releases, educational content imports, schema migrations, and persistent student data are separate operations.
 
 1. Run tests on the proposed release. Record old/new release IDs and inspect migrations. Create a fresh backup and verify a restore before a schema change. Briefly stop the app for the migration/switch window so old workers cannot write against a changed schema.
-2. Build the new checkout/venv outside `current`. Run production checks using its `deploy/manage`. Apply reviewed migrations with that release, and import content only when the content changed. Omissions still require deliberate `--allow-retire` approval; history is retained.
+2. Package the reviewed commit on the development machine, transfer it, and extract it into a new release directory with its own venv outside `current`. Run production checks using its `deploy/manage`. Apply reviewed migrations with that release, and import content only when the content changed. Omissions still require deliberate `--allow-retire` approval; history is retained.
 3. Collect static assets, switch `current` to the new release, then restart `huddleston`. Check HTTPS, login, one recognition and one recall flow, history, and timers. Never run production database tests against the live database.
 4. If application code fails, switch to a **schema-compatible** previous release, recollect its assets, and restart. Do not delete database volumes, drop tables, run `flush`, or restore an old dump as a routine code rollback.
 5. Milestone 3 is additive, but Milestone 2 does not understand recall or abandoned sessions. Once such records exist, rolling back to Milestone 2 is unsafe. Prefer a forward fix. Do not reverse migration 0003: it removes recall/review fields and its old constraint rejects saved recall answers.
