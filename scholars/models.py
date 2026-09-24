@@ -4,7 +4,15 @@ from django.db import models
 from django.utils import timezone
 
 
+class AnswerBank(models.Model):
+    # Immutable, content-addressed category bank shared by pinned session items.
+    id = models.CharField(max_length=64, primary_key=True)
+    category = models.CharField(max_length=100)
+    answers = models.JSONField()
+
+
 class Category(models.Model):
+    typed_bank = models.ForeignKey(AnswerBank, null=True, on_delete=models.PROTECT, related_name="+")
     id = models.CharField(max_length=100, primary_key=True)
     payload = models.JSONField()
     active = models.BooleanField(default=True)
@@ -70,7 +78,7 @@ class PracticeSession(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="practice_sessions")
     request_key = models.UUIDField()
     scope = models.JSONField(default=dict)
-    mode = models.CharField(max_length=20, default="recognition", editable=False)
+    mode = models.CharField(max_length=20, default="typed", editable=False)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True)
     abandoned_at = models.DateTimeField(null=True)
@@ -114,7 +122,7 @@ class PracticeSession(models.Model):
 
     @property
     def display_mode(self):
-        return "Multiple choice" if self.mode == "recognition" else "Recall · self-assessed"
+        return {"typed": "Typed answers", "recognition": "Multiple choice", "recall": "Recall · self-assessed"}.get(self.mode, self.mode)
 
 
 class SessionQuestion(models.Model):
@@ -122,6 +130,9 @@ class SessionQuestion(models.Model):
     position = models.PositiveSmallIntegerField()
     revision = models.ForeignKey(QuestionRevision, on_delete=models.PROTECT)
     choices = models.JSONField()
+    answer_bank = models.ForeignKey(AnswerBank, null=True, on_delete=models.PROTECT)
+    typed_answer = models.CharField(max_length=240, null=True)
+    skipped = models.BooleanField(default=False)
     selected = models.PositiveSmallIntegerField(null=True)
     is_correct = models.BooleanField(null=True)
     answered_at = models.DateTimeField(null=True)
@@ -138,9 +149,11 @@ class SessionQuestion(models.Model):
             models.UniqueConstraint(fields=["session", "position"], name="unique_session_position"),
             models.UniqueConstraint(fields=["session", "revision"], name="unique_session_question"),
             models.CheckConstraint(condition=models.Q(selected__isnull=True) | models.Q(selected__gte=0, selected__lte=3), name="valid_choice_index"),
-            models.CheckConstraint(condition=(models.Q(selected__isnull=True, is_correct__isnull=True, self_assessment__isnull=True, answered_at__isnull=True) |
-                                              models.Q(selected__isnull=False, is_correct__isnull=False, self_assessment__isnull=True, answered_at__isnull=False) |
-                                              models.Q(selected__isnull=True, is_correct__isnull=True, self_assessment__isnull=False, revealed_at__isnull=False, answered_at__isnull=False)), name="complete_answer_record"),
+            models.CheckConstraint(condition=(models.Q(selected__isnull=True, is_correct__isnull=True, self_assessment__isnull=True, answered_at__isnull=True, typed_answer__isnull=True, skipped=False) |
+                                              models.Q(selected__isnull=False, is_correct__isnull=False, self_assessment__isnull=True, answered_at__isnull=False, typed_answer__isnull=True, skipped=False) |
+                                              models.Q(selected__isnull=True, is_correct__isnull=True, self_assessment__isnull=False, revealed_at__isnull=False, answered_at__isnull=False, typed_answer__isnull=True, skipped=False) |
+                                              (models.Q(selected__isnull=True, is_correct__isnull=False, self_assessment__isnull=True, answered_at__isnull=False, answer_bank__isnull=False, typed_answer__isnull=False, skipped=False) & ~models.Q(typed_answer="")) |
+                                              models.Q(selected__isnull=True, is_correct=False, self_assessment__isnull=True, answered_at__isnull=False, answer_bank__isnull=False, typed_answer__isnull=True, skipped=True)), name="complete_answer_record"),
         ]
 
     @property

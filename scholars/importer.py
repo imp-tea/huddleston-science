@@ -77,5 +77,7 @@ def import_content(data_dir=None, allow_retire=False):
                                      ["current_revision"], batch_size=500)
         for model, ids in incoming:
             model.objects.exclude(pk__in=ids).update(active=False)
+        from .typed_answers import rebuild_banks
+        rebuild_banks()
         ContentImport.objects.create(digest=digest(data), counts=counts)
     return counts

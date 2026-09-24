@@ -18,6 +18,11 @@ from .progress import coverage, missed_topics, participation, personal_bests
 from .services import answer_question, mark_studied, reveal_question, start_session
 from .test_helpers import small_dataset
 
+
+def recognition_session(*args, **kwargs):
+    return start_session(*args, mode="recognition", **kwargs)
+
+
 PASSWORD = 'Milestone-two-test-password!'
 
 
@@ -36,7 +41,7 @@ class ProgressTests(TestCase):
         self.client.force_login(self.user)
 
     def session(self, scope=None, user=None):
-        return start_session(user or self.user, uuid.uuid4(), scope if scope is not None else {'topic': self.single.pk})
+        return recognition_session(user or self.user, uuid.uuid4(), scope if scope is not None else {'topic': self.single.pk})
 
     def answer(self, session, position=1, correct=True):
         item = session.items.select_related('revision').get(position=position)
@@ -341,7 +346,7 @@ class ConcurrentRewardsTests(TransactionTestCase):
             import_content(directory)
         user = User.objects.create_user('parallel-learner', PASSWORD, must_change_password=False)
         topic = next(t for t in Topic.objects.all() if Question.objects.filter(topic=t).count() == 1)
-        sessions = [start_session(user, uuid.uuid4(), {'topic': topic.pk}) for _ in range(2)]
+        sessions = [recognition_session(user, uuid.uuid4(), {'topic': topic.pk}) for _ in range(2)]
         barrier = Barrier(2)
         def work(session):
             close_old_connections()

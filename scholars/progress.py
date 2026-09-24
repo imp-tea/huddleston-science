@@ -16,7 +16,7 @@ def session_totals(sessions):
 
 def personal_bests(user):
     # One record per scope/mode/count/bank fingerprint; never rank unlike denominators.
-    return session_totals(PracticeSession.objects.filter(user=user, completed_at__isnull=False, mode="recognition").exclude(comparison_key="")).annotate(
+    return session_totals(PracticeSession.objects.filter(user=user, completed_at__isnull=False, mode__in=["recognition", "typed"]).exclude(comparison_key="")).annotate(
         best_rank=Window(expression=RowNumber(), partition_by=[F("comparison_key"), F("mode"), F("total_count")],
                          order_by=[F("score_count").desc(), F("completed_at").asc(), F("pk").asc()]),
     ).filter(best_rank=1).order_by("scope_label", "mode", "total_count", "-completed_at")
@@ -35,8 +35,13 @@ def participation(user):
 
 
 def missed_topics(user, limit=5):
-    latest = SessionQuestion.objects.filter(session__user=user, session__mode="recognition", revision_id=OuterRef("current_revision_id"), answered_at__isnull=False).order_by("-answered_at", "-pk")
-    missed = Question.objects.filter(active=True).annotate(last_correct=Subquery(latest.values("is_correct")[:1])).filter(last_correct=False)
+    # A success in one mode must not erase a miss in another mode.
+    questions = Question.objects.filter(active=True)
+    for mode in ("recognition", "typed"):
+        latest = SessionQuestion.objects.filter(session__user=user, session__mode=mode,
+            revision_id=OuterRef("current_revision_id"), answered_at__isnull=False).order_by("-answered_at", "-pk")
+        questions = questions.annotate(**{f"{mode}_correct": Subquery(latest.values("is_correct")[:1])})
+    missed = questions.filter(Q(recognition_correct=False) | Q(typed_correct=False))
     return Topic.objects.filter(active=True, pk__in=missed.values("topic_id")).order_by("title")[:limit]
 
 

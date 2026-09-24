@@ -88,7 +88,7 @@ def review_summary(user, category="", topic=""):
     today = timezone.localdate()
     labels = dict(Subcategory.objects.values_list("id", "payload__label")) if category else {}
     modes = []
-    for mode, label in (("recognition", "Multiple choice"), ("recall", "Recall · self-assessed")):
+    for mode, label in (("recognition", "Multiple choice"), ("recall", "Recall · self-assessed"), ("typed", "Typed answers")):
         states = {r.revision_id: r for r in current_reviews(user, mode)}
         total = dict(questions=len(bank), due=0, remembered=0, practicing=0, new=0)
         rows = {}
@@ -112,7 +112,7 @@ def review_summary(user, category="", topic=""):
         if topic:
             recent = recent.filter(revision__question__topic_id=topic)
         history = recent.aggregate(recent_answers=Count("pk"),
-            recent_successes=Count("pk", filter=Q(**({"is_correct": True} if mode == "recognition" else {"self_assessment": True}))),
+            recent_successes=Count("pk", filter=Q(**({"is_correct": True} if mode != "recall" else {"self_assessment": True}))),
             scheduled_answers=Count("pk", filter=Q(attempt_kind="review")),
             repeat_answers=Count("pk", filter=Q(attempt_kind="same_day")))
         rows = dict(sorted(rows.items(), key=lambda pair: pair[1]["label"].casefold()))

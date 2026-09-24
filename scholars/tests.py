@@ -16,6 +16,10 @@ from .models import Category, ContentImport, PracticeSession, Question, Question
 from .services import answer_question, start_session
 from .test_helpers import small_dataset
 
+def recognition_session(*args, **kwargs):
+    return start_session(*args, mode="recognition", **kwargs)
+
+
 PASSWORD = "Cedar-scholars-practice-682!"
 
 
@@ -33,7 +37,7 @@ class PracticeTests(TestCase):
         self.client.force_login(self.user)
 
     def start(self, **scope):
-        response = self.client.post(reverse("scholars:start"), {"request_key": uuid.uuid4(), **scope})
+        response = self.client.post(reverse("scholars:start"), {"mode": "recognition", "request_key": uuid.uuid4(), **scope})
         self.assertEqual(response.status_code, 302)
         return PracticeSession.objects.filter(user=self.user).latest("started_at")
 
@@ -77,14 +81,14 @@ class PracticeTests(TestCase):
             self.assertIn(topic.payload["subcategory_ids"][0], item.revision.context["topic"]["subcategory_ids"])
 
     def test_empty_scope_has_message_and_creates_no_session(self):
-        response = self.client.post(reverse("scholars:start"), {"request_key": uuid.uuid4(), "topic": "does-not-exist"}, follow=True)
+        response = self.client.post(reverse("scholars:start"), {"mode": "recognition", "request_key": uuid.uuid4(), "topic": "does-not-exist"}, follow=True)
         self.assertContains(response, "No practice questions")
         self.assertEqual(PracticeSession.objects.count(), 0)
 
     def test_duplicate_start_and_answers_are_idempotent(self):
         key = uuid.uuid4()
         for _ in range(2):
-            self.client.post(reverse("scholars:start"), {"request_key": key})
+            self.client.post(reverse("scholars:start"), {"mode": "recognition", "request_key": key})
         self.assertEqual(PracticeSession.objects.count(), 1)
         session = PracticeSession.objects.get()
         self.answer(session, 1, correct=False)
@@ -148,7 +152,7 @@ class PracticeTests(TestCase):
         self.assertContains(response, "Change temporary password")
         browser.post(reverse("password_change"), {"old_password": "Temporary-journey-839!", "new_password1": PASSWORD, "new_password2": PASSWORD})
         original_id = User.objects.get(username="new-scholar").pk
-        browser.post(reverse("scholars:start"), {"request_key": uuid.uuid4(), "topic": Topic.objects.first().pk})
+        browser.post(reverse("scholars:start"), {"mode": "recognition", "request_key": uuid.uuid4(), "topic": Topic.objects.first().pk})
         session = PracticeSession.objects.get(user_id=original_id)
         for item in session.items.select_related("revision"):
             browser.post(reverse("scholars:answer", args=[session.pk, item.position]),
@@ -198,7 +202,7 @@ class ImportTests(TestCase):
         (self.path / name).write_text(json.dumps(value))
 
     def test_repeat_import_preserves_ids_counts_history_and_revisions(self):
-        session = start_session(self.user, uuid.uuid4(), {})
+        session = recognition_session(self.user, uuid.uuid4(), {})
         answer_question(self.user, session.pk, 1, 0)
         before = list(Question.objects.order_by("id").values_list("id", "current_revision_id"))
         import_content(self.path)
@@ -208,7 +212,7 @@ class ImportTests(TestCase):
 
     def test_content_edit_creates_revision_without_changing_inflight_or_saved_results(self):
         q = Question.objects.first()
-        session = start_session(self.user, uuid.uuid4(), {"topic": q.topic_id})
+        session = recognition_session(self.user, uuid.uuid4(), {"topic": q.topic_id})
         old = session.items.select_related("revision").first()
         answer_question(self.user, session.pk, 1, old.choices.index(old.revision.payload["correct_answer"]))
         questions = self.data["practice/01.json"]
@@ -254,7 +258,7 @@ class ImportTests(TestCase):
         self.assertEqual(ContentImport.objects.count(), 1)
 
     def test_inflight_answer_uses_original_revision_after_content_change(self):
-        session = start_session(self.user, uuid.uuid4(), {})
+        session = recognition_session(self.user, uuid.uuid4(), {})
         item = session.items.select_related("revision").first()
         original_correct = item.choices.index(item.revision.payload["correct_answer"])
         questions = self.data["practice/01.json"]
@@ -269,7 +273,7 @@ class ImportTests(TestCase):
 
     def test_removals_require_explicit_retirement_and_preserve_quiz(self):
         topic = Topic.objects.exclude(pk="legacy-topic").last()
-        session = start_session(self.user, uuid.uuid4(), {"topic": topic.pk})
+        session = recognition_session(self.user, uuid.uuid4(), {"topic": topic.pk})
         self.write("topics.json", [t for t in self.data["topics.json"] if t["study_topic_id"] != topic.pk])
         self.write("content.json", {k: v for k, v in self.data["content.json"].items() if k != topic.pk})
         self.write("practice/01.json", [q for q in self.data["practice/01.json"] if q["study_topic_id"] != topic.pk])
@@ -344,14 +348,14 @@ class ConcurrentPracticeTests(TransactionTestCase):
 
     def test_concurrent_duplicate_starts_create_one_session(self):
         key = uuid.uuid4()
-        ids = self.parallel(lambda user: start_session(user, key, {}).pk)
+        ids = self.parallel(lambda user: recognition_session(user, key, {}).pk)
         self.assertEqual(ids[0], ids[1])
         self.assertEqual(PracticeSession.objects.count(), 1)
         self.assertEqual(PracticeSession.objects.get().total, 10)
 
     def test_concurrent_final_answers_complete_once(self):
         single = next(t for t in Topic.objects.all() if Question.objects.filter(topic=t).count() == 1)
-        session = start_session(self.user, uuid.uuid4(), {"topic": single.pk})
+        session = recognition_session(self.user, uuid.uuid4(), {"topic": single.pk})
         ids = self.parallel(lambda user: answer_question(user, session.pk, 1, 0).pk)
         self.assertEqual(ids[0], ids[1])
         session.refresh_from_db()

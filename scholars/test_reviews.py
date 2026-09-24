@@ -299,7 +299,7 @@ class ReviewTests(TestCase):
             SessionQuestion.objects.filter(pk=item.pk).update(is_correct=True)
 
     def test_invalid_mode_and_selection_rejected_without_session(self):
-        for mode, selection in [('typed', 'random'), ('recognition', 'untrusted')]:
+        for mode, selection in [('unknown', 'random'), ('recognition', 'untrusted')]:
             with self.assertRaises(ValidationError):
                 self.start(mode, selection)
         self.assertFalse(PracticeSession.objects.exists())

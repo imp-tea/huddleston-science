@@ -11,7 +11,7 @@ from django.views.decorators.http import require_POST
 from accounts.models import User
 from accounts.views import administrator_required
 from .catalog import describe_scope, topic_pool
-from .forms import AnswerForm, RecallForm, GoalForm, SCOPE_FIELDS, StartForm
+from .forms import AnswerForm, RecallForm, TypedAnswerForm, GoalForm, SCOPE_FIELDS, StartForm
 from .models import Category, PracticeSession, RewardEvent, Source, StudyPreferences, StudyState, Subcategory, Topic, TopicRedirect
 from .progress import coverage, missed_topics, participation, personal_bests, session_totals
 from .reviews import review_summary
@@ -85,7 +85,7 @@ def start(request):
     scope = {k: form.cleaned_data[k] for k in SCOPE_FIELDS if form.cleaned_data[k]}
     try:
         session = start_session(request.user, form.cleaned_data["request_key"], scope,
-                                mode=form.cleaned_data["mode"] or "recognition", selection=form.cleaned_data["selection"] or "random")
+                                mode=form.cleaned_data["mode"] or "typed", selection=form.cleaned_data["selection"] or "random")
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
         return redirect("scholars:dashboard")
@@ -99,25 +99,48 @@ def visible_session(request, pk, allow_admin=False):
     return get_object_or_404(sessions, pk=pk)
 
 
+def question_form(session, item, data=None):
+    if session.mode == "typed":
+        return TypedAnswerForm(data)
+    return RecallForm(data) if session.mode == "recall" else AnswerForm(item.choices, data)
+
+
+def render_question(request, session, item, form, *, prompt=False, status=200):
+    context = {"session": session, "item": item, "form": form, "prompt": prompt}
+    if session.mode == "typed":
+        from .typed_answers import for_item
+        # Only searchable/display data; no answer key, correctness flags, or grading scores.
+        context["suggestion_data"] = {"version": item.answer_bank_id, "index": [
+            {key: entry[key] for key in ("text", "key", "parts")} for entry in for_item(item)["index"]]}
+    return render(request, "scholars/question.html", context, status=status)
+
+
 @login_required
 def session_view(request, pk):
     session = visible_session(request, pk)
     if session.completed_at or session.abandoned_at:
         return redirect("scholars:results", pk=pk)
-    item = session.items.filter(answered_at__isnull=True).select_related("revision").first()
-    form = RecallForm() if session.mode == "recall" else AnswerForm(item.choices)
-    return render(request, "scholars/question.html", {"session": session, "item": item, "form": form})
+    item = session.items.filter(answered_at__isnull=True).select_related("revision", "answer_bank").first()
+    form = question_form(session, item)
+    return render_question(request, session, item, form)
 
 
 @login_required
 @require_POST
 def answer(request, pk, position):
     session = visible_session(request, pk)
-    item = get_object_or_404(session.items.select_related("revision"), position=position)
-    form = RecallForm(request.POST) if session.mode == "recall" else AnswerForm(item.choices, request.POST)
+    item = get_object_or_404(session.items.select_related("revision", "answer_bank"), position=position)
+    if item.answered_at:
+        return redirect("scholars:feedback", pk=pk, position=position)
+    form = question_form(session, item, request.POST)
     if form.is_valid():
         try:
-            if session.mode == "recall":
+            if session.mode == "typed":
+                saved = answer_question(request.user, pk, position, typed_answer=form.cleaned_data["typed_answer"],
+                                        skip=form.cleaned_data["action"] == "skip")
+                if saved.answered_at is None:
+                    return render_question(request, session, item, form, prompt=True)
+            elif session.mode == "recall":
                 answer_question(request.user, pk, position, self_assessment=form.cleaned_data["self_assessment"])
             else:
                 answer_question(request.user, pk, position, form.cleaned_data["selected"])
@@ -125,7 +148,7 @@ def answer(request, pk, position):
             form.add_error(None, exc)
         else:
             return redirect("scholars:feedback", pk=pk, position=position)
-    return render(request, "scholars/question.html", {"session": session, "item": item, "form": form}, status=400)
+    return render_question(request, session, item, form, status=400)
 
 
 @login_required
@@ -145,7 +168,7 @@ def history(request):
 def results(request, pk):
     session = visible_session(request, pk, allow_admin=True)
     best = None
-    if session.mode == "recognition" and session.completed_at and session.comparison_key:
+    if session.mode in {"typed", "recognition"} and session.completed_at and session.comparison_key:
         best = session_totals(PracticeSession.objects.filter(user=session.user, mode=session.mode, comparison_key=session.comparison_key,
             completed_at__isnull=False)).filter(total_count=session.total).order_by("-score_count", "completed_at").first()
     return render(request, "scholars/results.html", {"session": session,

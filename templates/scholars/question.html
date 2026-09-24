@@ -1,9 +1,22 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Practice · Scholars Bowl{% endblock %}
 {% block content %}<div class="quiz">
 <p class="muted">{{ session.display_mode }} · {{ session.display_selection }} · Question {{ item.position }} of {{ session.total }}</p><progress value="{{ session.answered }}" max="{{ session.total }}" aria-label="Questions answered"></progress>
 <h1 class="question" id="question">{{ item.revision.payload.question }}</h1>
-{% if session.mode == 'recall' %}
+{% if session.mode == 'typed' %}
+<form method="post" action="{% url 'scholars:answer' session.pk item.position %}" class="typed-answer">{% csrf_token %}
+{{ form.non_field_errors }}{{ form.typed_answer.errors }}
+<label for="id_typed_answer">Your answer</label>
+<p id="answer-help" class="muted">Type at least 2 characters for suggestions. Use ↑ / ↓ and Tab or Enter to complete one. Check answer submits your text; a close answer lets you try again.</p>
+{{ form.typed_answer }}
+<ul id="answer-suggestions" role="listbox" aria-label="Suggested answers" hidden></ul>
+<p id="answer-status" class="{% if prompt %}answer-prompt{% else %}muted{% endif %}" role="status" aria-live="polite">{% if prompt %}Not quite, but close — try again!{% endif %}</p>
+<div class="answer-actions"><button type="submit" name="action" value="answer">Check answer</button><button type="submit" name="action" value="skip" formnovalidate class="secondary">Skip</button></div>
+</form>
+{{ suggestion_data|json_script:'typed-bank' }}
+<script type="module" src="{% static 'typed-answer.js' %}"></script>
+{% elif session.mode == 'recall' %}
   {% if item.revealed_at %}
     <p><strong>Answer:</strong> {{ item.revision.payload.correct_answer }}</p><p>{{ item.revision.payload.explanation }}</p>
     <form method="post" action="{% url 'scholars:answer' session.pk item.position %}" class="answers">{% csrf_token %}{{ form.as_p }}<button>Save assessment</button></form>

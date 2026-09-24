@@ -1,12 +1,12 @@
 # Huddleston Science
 
-A Django/PostgreSQL classroom site with private, pseudonymous accounts and persistent Scholars Bowl practice. Milestones 1–3 are implemented locally; live deployment and the student pilot remain pending. The complete journey remains: administrator creates a student → student replaces a temporary password → completes a quiz → returns to saved results on another device.
+A Django/PostgreSQL classroom site with private, pseudonymous accounts and persistent Scholars Bowl practice. Milestones 1–3 and typed-answer practice are implemented locally; live deployment and the student pilot remain pending. The complete journey remains: administrator creates a student → student replaces a temporary password → completes a quiz → returns to saved results on another device.
 
 The original static site and educational content pipeline remain available. The Django application is now the classroom website; static `dist/` output does **not** include accounts or saved results. Nothing has been deployed.
 
 ## Local setup
 
-Requires Python 3.10+ and PostgreSQL 14+ (PostgreSQL 17 is used by the supplied Compose service). Node.js 18+ is needed only for the original JavaScript tests. Runtime dependencies are pinned in `requirements.txt`: Django 5.2.17 LTS, psycopg 3.3.6, and python-dotenv 1.2.2. Django's [supported release table](https://www.djangoproject.com/download/#supported-versions) lists 5.2 LTS security support through April 2028.
+Requires Python 3.10+ and PostgreSQL 14+ (PostgreSQL 17 is used by the supplied Compose service). Node.js 18+ is needed for the JavaScript tests. Runtime dependencies are pinned in `requirements.txt`: Django 5.2.17 LTS, psycopg 3.3.6, and python-dotenv 1.2.2. Django's [supported release table](https://www.djangoproject.com/download/#supported-versions) lists 5.2 LTS security support through April 2028.
 
 ```sh
 python3 -m venv .venv
@@ -132,9 +132,9 @@ The additive migration preserves existing accounts, sessions, answers, and impor
 
 ## Personalization and recall (Milestone 3)
 
-**Start practice** now defaults to a personalized mix. Students can select multiple choice or **Recall · self-assessed** and choose personalized, random, or due-only questions on the dashboard, in the library, or on a topic. All existing scope/search/status filters still apply. Personalized sets aim for 4 due questions (oldest first), 3 weak questions, and 3 new questions, filling missing groups from due → weak → new → remaining questions, without duplicates, up to 10. Weak means the current revision's review state has no successful steps. “New to reviews” means no scheduling evidence for that revision and mode, even if older study/history exists. Due-only practice never fills with non-due questions; an empty scope offers a clear message.
+**Start practice** now defaults to a personalized mix. Students can select **Typed answers** (the default), multiple choice, or **Recall · self-assessed** and choose personalized, random, or due-only questions on the dashboard, in the library, or on a topic. All existing scope/search/status filters still apply. Personalized sets aim for 4 due questions (oldest first), 3 weak questions, and 3 new questions, filling missing groups from due → weak → new → remaining questions, without duplicates, up to 10. Weak means the current revision's review state has no successful steps. “New to reviews” means no scheduling evidence for that revision and mode, even if older study/history exists. Due-only practice never fills with non-due questions; an empty scope offers a clear message.
 
-Recall hides choices and the answer until **Reveal answer**. Revealing persists across devices but awards nothing and does not count as an answer. After revealing, choose **I remembered** or **I need more practice**, then **Save assessment**. Recall stores a separate boolean assessment; its objective correctness/selected-choice fields stay empty. Explanations and source links stay visible until Continue. Recall does not enter multiple-choice accuracy or personal bests. XP and weekly goals count participation across both modes, with the same stable-question/day limit, so changing modes earns no extra same-day XP.
+Recall hides choices and the answer until **Reveal answer**. Revealing persists across devices but awards nothing and does not count as an answer. After revealing, choose **I remembered** or **I need more practice**, then **Save assessment**. Recall stores a separate boolean assessment; its objective correctness/selected-choice fields stay empty. Explanations and source links stay visible until Continue. Recall does not enter multiple-choice accuracy or personal bests. XP and weekly goals count participation across all three modes, with the same stable-question/day limit, so changing modes earns no extra same-day XP.
 
 ### Exact review rules
 
@@ -154,7 +154,7 @@ Readiness is computed only from active questions and their current revisions. Re
 
 Saved answers include first/same-day/early/due/historical attempt classifications and the next-review/step snapshot at answer time. Older Milestone 1/2 answers are retained without inventing scheduling evidence; review tracking starts with new answers. Category and subcategory summaries count each current question once within each scope, even when subcategories overlap. The progress page shows separate 30-day objective and self-assessed results with denominators, due reviews, remembered/practicing/new counts, scheduled versus same-day attempts, and the next five reviews for each mode. Study markers, coverage, and XP remain separate.
 
-Only **completed random multiple-choice** sessions enter comparable personal bests. Adaptive and due-only question sets are history/progress records without scored bests because their selection changes with the learner. Existing random-session records keep their comparison keys.
+Only **completed random typed-answer or multiple-choice** sessions enter comparable personal bests, with separate records for each mode. Adaptive and due-only question sets are history/progress records without scored bests because their selection changes with the learner. Existing random-session records keep their comparison keys.
 
 **Save and leave** retains a resumable session. **End this session → End session** explicitly marks it ended early, keeps saved answers/XP/review evidence, and excludes it from bests and resume prompts. There is no automatic expiry. A completed session cannot become abandoned.
 
@@ -170,6 +170,34 @@ python manage.py runserver 127.0.0.1:8000
 Migration `0003` is additive and already applied to this workspace's local database. No re-import, replacement administrator, or historical-score rewrite is needed. Do not roll back to Milestone 2 after recall records exist; it cannot interpret them. Read [DEPLOYMENT.md](DEPLOYMENT.md) for production setup, HTTPS/proxy trust, systemd services/timers, backup/restore commands, code versus data rollback, and the owner-led student pilot.
 
 The production dependency file adds Gunicorn 26.2.0. Production requires a strong secret, explicit hosts, debug off, and a database password. A loopback-only Gunicorn listener accepts Caddy's overwritten scheme/client headers; the application rejects other proxy peers and invalid addresses. Daily backup and housekeeping timers are supplied, but are not installed on a server. Local backup/restore commands also work with the normal `.env`; point `PG_BIN_DIR` at the workspace's Postgres.app `bin` directory when using that installation.
+
+## Typed answers
+
+New practice defaults to **Typed answers**. Multiple choice and self-assessed recall keep their existing behavior, and saved sessions retain their original mode. Typed answers use the same personalized/random/due-only selection and library scope filters.
+
+Type at least two characters for up to five suggestions. Arrow keys highlight a suggestion; Tab or Enter completes it without submitting. A second Enter, or **Check answer**, submits the text. Selecting a suggestion is optional. Blank input is a validation error. **Skip** explicitly saves a skipped attempt with no score credit and reveals persistent feedback; Continue remains an explicit action. Plain forms, prompts, and feedback work without JavaScript.
+
+The server grades against the session's pinned revision. Normalized exact answers earn one point. Meaningful partial answers, very close full spellings, and directly entered suppressed wording variants prompt “Not quite, but close — try again!” Prompts preserve the entered text without saving an answer, awarding XP, counting weekly participation, updating reviews, or completing a session. Repeated prompts are allowed. Finalized text is retained in feedback, history, and administrator results. A finalized skip follows the existing participation policy: it counts as an attempted question for XP and weekly goals, subject to the same stable-question/day limits across all modes, and schedules an unsuccessful review.
+
+Each primary category has a content-addressed answer bank containing every eligible current question's correct answer and distractors. Imports rebuild current bank pointers in the content transaction; unchanged banks reuse their digest. Each typed session item pins an immutable bank alongside its question revision. Old banks remain protected while referenced. Subcategory/topic/search filters restrict questions, not their category suggestion banks. No candidate-review aliases, semantic matching, phonetics, AI calls, or sibling-repository runtime dependencies are used.
+
+The explorer's NFD normalization, search scores, transpositions, numeric safeguards, and conservative wording suppression are ported in `static/typed-matching.js` and `scholars/typed_answers.py`. Wording variants remain searchable but display the question's exact answer; this does not merge source content or mutate the shared bank. The server prepares the question's suggestion view and sends only display/search data. Browser searches make no network requests. Bounded server caches retain at most 24 bank indexes and 32 prepared question views, keyed by immutable content. JavaScript/Python shared fixtures verify normalization, filtering, and grading parity; suggestion ranking stays in the browser.
+
+Typed practice has independent review evidence, readiness, due/weak/new selection, objective accuracy, and random-session bests. The existing multiple-choice coverage table remains explicitly labeled; typed accuracy appears in its separate review summary. Corrected previous misses are mode-specific, and the revisit list retains misses in either objective mode. Typed bests also include category-bank versions in their comparison keys because changed suggestions can affect difficulty. Historical classifications and evidence are not backfilled.
+
+### Upgrade
+
+```sh
+source .venv/bin/activate
+python manage.py migrate
+python manage.py check
+```
+
+Migrations `0004` and `0005` add banks and typed/skip fields, expand answer-record constraints, initialize banks from already imported current revisions, and change the default for new sessions. No re-import is required. Future edits to authoritative `data/` still use `python manage.py import_content`. Old recognition/recall records are preserved. Do not run older application code against a database containing typed sessions; use the existing matched code/database restore procedure.
+
+Validation on September 24, 2026: the PostgreSQL backend suite, migration upgrade test, 5 Python content/build tests, and 7 Node tests passed; system, migration, and diff checks were clean. Chrome verified prompts → suggestions → direct Saturn variant prompt → keyboard completion → persistent feedback → Continue/results, separate-device resume/history, 320px layouts, reduced motion, and ordinary forms with JavaScript disabled. The isolated validation database contained typed, skipped, recognition, recall, and abandoned records; a PostgreSQL dump/restore matched all 25 public tables' counts and checksums. No real student records or deployment were changed. Migrations were exercised in isolated databases; run the upgrade above for an existing local application database.
+
+The largest category contains 5,549 answers. `node tests/typed-benchmark.js` measured approximately 9–17 ms per example search, 9.5 ms to index, and 1.1 ms per question preparation on this machine. No worker is needed based on that measurement; slower classroom devices remain a pilot check. Screenshots, browser scripts, and temporary backup artifacts are ignored local validation files.
 
 ## Repository layout
 
@@ -192,7 +220,7 @@ python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py test accounts scholars classroom --settings=classroom.test_settings --noinput
 python -m unittest discover -s tests
-node --test tests/quiz.test.js
+node --test tests/*.test.js
 ```
 
 `classroom.test_settings` uses an isolated `test_<POSTGRES_DB>` database and fast password hashing only for tests. Never run the website with test settings. Tests cover authorization, no identity fields, one-administrator database protections, account lifecycle, CSRF, login throttling, the complete student journey, cross-device persistence, smaller question pools, scoring, interrupted sessions, sequential/concurrent retries, repeat imports, rollback, retirement, versioning, and full-dataset preservation.
