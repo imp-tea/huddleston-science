@@ -50,6 +50,7 @@ class TopicRedirect(models.Model):
 
 class Question(models.Model):
     id = models.CharField(max_length=100, primary_key=True)
+    format = models.CharField(max_length=20, default="multiple_choice", choices=[("multiple_choice", "Multiple choice"), ("typed", "Typed")], db_index=True)
     topic = models.ForeignKey(Topic, on_delete=models.PROTECT)
     current_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
     active = models.BooleanField(default=True)

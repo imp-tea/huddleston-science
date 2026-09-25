@@ -9,6 +9,7 @@ from .catalog import describe_scope, topic_pool
 from .reviews import record_review, select_questions
 from .typed_answers import for_item, grade
 from .models import PracticeSession, Question, RewardEvent, SessionQuestion, StudyState
+from .question_pools import current_questions
 
 rng = random.SystemRandom()
 
@@ -31,7 +32,7 @@ def start_session(user, request_key, scope, mode="typed", selection="random"):
         raise ValidationError("Choose a valid practice mode and selection.")
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock_shared(%s)", [CONTENT_LOCK])
-    pool = Question.objects.filter(active=True, current_revision__isnull=False, topic__in=topic_pool(user, scope))
+    pool = current_questions(mode).filter(topic__in=topic_pool(user, scope))
     bank = list(pool.order_by("id").values_list("id", "current_revision_id"))
     ids = [qid for qid, revision_id in bank]
     if not ids:
@@ -49,7 +50,7 @@ def start_session(user, request_key, scope, mode="typed", selection="random"):
     items = []
     for position, qid in enumerate(selected_ids, 1):
         revision = questions[qid].current_revision
-        choices = [revision.payload["correct_answer"], *revision.payload["distractors"]]
+        choices = [revision.payload["correct_answer"], *revision.payload["distractors"]] if mode == "recognition" else []
         rng.shuffle(choices)
         items.append(SessionQuestion(session=session, position=position, revision=revision, choices=choices,
                                      answer_bank_id=questions[qid].topic.category.typed_bank_id if mode == "typed" else None))

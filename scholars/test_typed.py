@@ -275,7 +275,6 @@ class TypedMigrationTests(TransactionTestCase):
         from django.utils import timezone
         executor = MigrationExecutor(connection)
         old_target = [('scholars', '0003_reviewstate_and_more')]
-        new_target = [('scholars', '0005_alter_practicesession_mode')]
         executor.migrate(old_target)
         try:
             apps = executor.loader.project_state(old_target).apps
@@ -295,7 +294,7 @@ class TypedMigrationTests(TransactionTestCase):
             revealed = OldItem.objects.create(session=recall, position=1, revision=revision, choices=saved.choices, revealed_at=timezone.now())
         finally:
             executor = MigrationExecutor(connection)
-            executor.migrate(new_target)
+            executor.migrate(executor.loader.graph.leaf_nodes())
         self.assertEqual(PracticeSession.objects.get(pk=recognition.pk).mode, 'recognition')
         self.assertEqual(PracticeSession.objects.get(pk=recall.pk).mode, 'recall')
         self.assertTrue(SessionQuestion.objects.get(pk=saved.pk).is_correct)

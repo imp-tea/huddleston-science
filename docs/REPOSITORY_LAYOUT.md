@@ -1,16 +1,17 @@
 # Repository and production release boundaries
 
 The repository contains application source plus development and operational
-tools. The production server receives an explicit subset built by
-`scripts/package_release.py`, rather than a clone of the entire Git repository.
+tools. The preferred production workflow uses a permanent Git checkout; see
+[the update guide](../UPDATE_DEPLOYMENT.md). The optional
+`scripts/package_release.py` creates the explicit runtime subset described below.
 
-| Files | Keep in Git | Include in production | Purpose |
+| Files | Keep in Git | Include in release package | Purpose |
 | --- | --- | --- | --- |
 | `classroom/`, `accounts/`, `scholars/` runtime Python and migrations | Yes | Yes | Django application, database schema, administrative commands |
 | `templates/`, `static/` | Yes | Yes | Current classroom interface |
 | `data/` | Yes | Yes | Authoritative educational content and repeatable imports |
 | `manage.py`, requirements files, `deploy/` | Yes | Yes | Runtime dependencies, server configuration, backup/housekeeping tools |
-| `scripts/build.py`, `ATTRIBUTION.md`, `DEPLOYMENT.md` | Yes | Yes | Import validation, attribution page, operator instructions |
+| `scripts/build.py`, `scripts/typed_content.py`, `ATTRIBUTION.md`, deployment guides | Yes | Yes | Import validation, attribution page, operator instructions |
 | Tests, test settings, fixtures, benchmarks | Yes | No | Regression checks on development machines/CI |
 | Research, normalization, and credential-scanning scripts | Yes | No | Maintain future content safely |
 | `src/`, `public/`, `scripts/serve.py`, `package.json` | Yes | No | Preserved static preview and JavaScript development tooling |
@@ -20,7 +21,7 @@ tools. The production server receives an explicit subset built by
 
 Tests and migration history serve different purposes: migrations are necessary
 to create and upgrade the production database, so they remain in every release.
-The server also needs `scripts/build.py` because the content importer calls its
+The server also needs `scripts/build.py` and `scripts/typed_content.py` because the content importer calls its
 validator, even though the legacy static site itself is not deployed.
 
 ## Create a release

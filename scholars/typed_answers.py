@@ -156,10 +156,11 @@ def rebuild_banks():
     """Called under the import lock; old banks remain protected by session items."""
     from .models import AnswerBank, Category, Question
     from .importer import digest
+    from .question_pools import current_questions
     banks = {}
-    for category, payload in Question.objects.filter(active=True, topic__active=True, current_revision__isnull=False).order_by('pk').values_list('topic__category_id', 'current_revision__payload'):
+    for category, payload in current_questions('typed').order_by('pk').values_list('topic__category_id', 'current_revision__payload'):
         bank = banks.setdefault(category, {})
-        for answer in [payload['correct_answer'], *payload['distractors']]:
+        for answer in [payload['correct_answer'], *payload.get('distractors', [])]:
             bank.setdefault(answer_key(answer), answer.strip())
     for category in Category.objects.all():
         bank = banks.get(category.pk, {})

@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from .models import ReviewState
+from .question_pools import current_questions, question_format
 
 INTERVALS = (1, 3, 7, 14, 30)
 REMEMBERED_SUCCESSES = 3
@@ -10,6 +11,7 @@ REMEMBERED_SUCCESSES = 3
 
 def current_reviews(user, mode="recognition"):
     return ReviewState.objects.filter(user=user, mode=mode,
+        revision__question__format=question_format(mode),
         revision_id=F("revision__question__current_revision_id"),
         revision__question__active=True, revision__question__topic__active=True)
 
@@ -49,7 +51,7 @@ def select_questions(bank, user, mode, selection, rng):
 
 def record_review(user, item, mode, successful):
     question = item.revision.question
-    if not question.active or not question.topic.active or question.current_revision_id != item.revision_id:
+    if not question.active or not question.topic.active or question.current_revision_id != item.revision_id or question.format != question_format(mode):
         item.attempt_kind = "historical"
         return
     today = timezone.localdate(item.answered_at)
@@ -84,11 +86,11 @@ def review_summary(user, category="", topic=""):
         questions = questions.filter(topic__category_id=category)
     if topic:
         questions = questions.filter(topic_id=topic)
-    bank = list(questions.values_list("current_revision_id", "topic__category_id", "topic__payload__subcategory_ids"))
     today = timezone.localdate()
     labels = dict(Subcategory.objects.values_list("id", "payload__label")) if category else {}
     modes = []
     for mode, label in (("recognition", "Multiple choice"), ("recall", "Recall · self-assessed"), ("typed", "Typed answers")):
+        bank = list(questions.filter(format=question_format(mode)).values_list("current_revision_id", "topic__category_id", "topic__payload__subcategory_ids"))
         states = {r.revision_id: r for r in current_reviews(user, mode)}
         total = dict(questions=len(bank), due=0, remembered=0, practicing=0, new=0)
         rows = {}

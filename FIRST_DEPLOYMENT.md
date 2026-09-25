@@ -1,3 +1,5 @@
+> Already have a running server? Use [UPDATE_DEPLOYMENT.md](UPDATE_DEPLOYMENT.md) for a permanent Git checkout and future `git pull` updates. This document describes the original first-installation package method.
+
 # First deployment: from your Mac to huddleston.science
 
 This guide is for a **fresh Ubuntu 24.04 droplet** at **206.189.230.160**. First check the operating system in step 1. If it is different, or the machine already hosts something, get the commands adapted before continuing. Nothing in this guide has been run on your droplet yet.
@@ -247,7 +249,7 @@ sudo -u huddleston deploy/manage bootstrap_admin classroom-admin
 
 The last command asks you to choose the **website administrator password** twice. Save it in your password manager. You will use username `classroom-admin` and this password in the browser. It is separate from the server and database passwords.
 
-The content import loads 7,072 topics and 10,976 practice questions. `migrate` creates the database tables. `collectstatic` puts the stylesheet where Caddy can serve it.
+The current content import loads 7,072 topics and 26,923 practice questions: 10,976 multiple-choice and 15,947 typed/recall questions. `migrate` creates the database tables. `collectstatic` puts the stylesheet where Caddy can serve it.
 
 The deployment check currently produces two expected warnings: `security.W005` and `security.W021`. They concern extending HTTPS policy to subdomains and browser preload lists; both are deliberately off. Other errors or warnings need investigation.
 

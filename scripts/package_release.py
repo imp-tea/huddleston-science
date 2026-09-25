@@ -15,7 +15,8 @@ from tempfile import TemporaryDirectory
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {
     'manage.py', 'requirements.txt', 'requirements-production.txt', 'ATTRIBUTION.md',
-    'DEPLOYMENT.md', 'scripts/build.py',
+    'DEPLOYMENT.md', 'UPDATE_DEPLOYMENT.md', 'scripts/build.py', 'scripts/typed_content.py',
+    'data/typed-questions.json',
     'data/taxonomy.json', 'data/topics.json', 'data/content.json', 'data/sources.json',
     'data/topic-redirects.json', 'data/import-manifest.json',
     'deploy/Caddyfile', 'deploy/gunicorn.conf.py', 'deploy/manage',

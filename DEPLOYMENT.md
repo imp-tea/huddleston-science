@@ -1,6 +1,8 @@
 # Launch preparation and operations
 
-Milestone 3 supplies a production profile, Caddy configuration, Gunicorn configuration, systemd units, daily backups/housekeeping, and a tested PostgreSQL restore drill. **No deployment has occurred.** The supplied server layout targets a Linux machine with systemd, local PostgreSQL, and Caddy. It is an example to adapt after inspecting the actual droplet; its OS, memory, installed software, SSH access, and firewall have not been assumed.
+**For the existing server and ordinary Git-pull updates, follow [UPDATE_DEPLOYMENT.md](UPDATE_DEPLOYMENT.md).** It converts the current extracted package to one permanent checkout at `/srv/huddleston/app`, keeping `/srv/huddleston/current` as the service path. The release-directory workflow below remains an alternative, not a required step for each update.
+
+Milestone 3 supplies a production profile, Caddy configuration, Gunicorn configuration, systemd units, daily backups/housekeeping, and a tested PostgreSQL restore drill. The owner has deployed the site. The supplied server layout targets a Linux machine with systemd, local PostgreSQL, and Caddy. It is an example to adapt after inspecting the actual droplet; its OS, memory, installed software, SSH access, and firewall have not been assumed.
 
 Before rollout, confirm those details, DNS A/AAAA records, existing services using ports 80/443, and the owner’s readiness for a student pilot. Choose an encrypted off-server backup destination and an operator who will check failures. Keep the student site closed until HTTPS and a server-side restore drill pass.
 
@@ -111,7 +113,7 @@ For actual disaster recovery, provision a fresh PostgreSQL database/role, restor
 
 ## Updates and rollback
 
-Application releases, educational content imports, schema migrations, and persistent student data are separate operations.
+Application releases, educational content imports, schema migrations, and persistent student data are separate operations. Use [the Git checkout guide](UPDATE_DEPLOYMENT.md) for the preferred workflow; the numbered packaging steps below describe the alternative. After importing the dedicated typed bank, older code that assumes distractors cannot safely serve it. Do not blindly switch back or reverse migrations; prefer a targeted fix and preserve pinned sessions.
 
 1. Run tests on the proposed release. Record old/new release IDs and inspect migrations. Create a fresh backup and verify a restore before a schema change. Briefly stop the app for the migration/switch window so old workers cannot write against a changed schema.
 2. Package the reviewed commit on the development machine, transfer it, and extract it into a new release directory with its own venv outside `current`. Run production checks using its `deploy/manage`. Apply reviewed migrations with that release, and import content only when the content changed. Omissions still require deliberate `--allow-retire` approval; history is retained.

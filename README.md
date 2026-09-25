@@ -1,8 +1,8 @@
 # Huddleston Science
 
-A Django/PostgreSQL classroom site with private, pseudonymous accounts and persistent Scholars Bowl practice. Milestones 1–3 and typed-answer practice are implemented locally; live deployment and the student pilot remain pending. The complete journey remains: administrator creates a student → student replaces a temporary password → completes a quiz → returns to saved results on another device.
+A Django/PostgreSQL classroom site with private, pseudonymous accounts and persistent Scholars Bowl practice. The complete journey is: administrator creates a student → student replaces a temporary password → completes a quiz → returns to saved results on another device.
 
-The original static site and educational content pipeline remain available. The Django application is now the classroom website; static `dist/` output does **not** include accounts or saved results. Nothing has been deployed.
+The original static site and educational content pipeline remain available. The Django application is now the classroom website; static `dist/` output does **not** include accounts or saved results. For the existing server, use the [Git checkout update guide](UPDATE_DEPLOYMENT.md).
 
 ## Local setup
 
@@ -54,7 +54,7 @@ To stop it, use the same `pg_ctl` executable with `-D .local/pgdata stop`. New c
 1. Log in as the administrator and open **Admin**. Create a pseudonymous username and a unique temporary password; deliver both to the student outside the website.
 2. Log out. Log in as the student. Every private route requires replacing the temporary password before continuing.
 3. Open **Scholars Bowl**, then **Start practice**, or browse a category/subcategory/topic and practice that scope.
-4. Choose an answer and select **Check answer**. The server saves and scores it immediately. Feedback keeps the question, correct answer, explanation, and source links visible until **Continue**.
+4. Type an answer and select **Check answer**. The server saves and scores finalized answers immediately. Feedback keeps the question, correct answer, available explanation, and source links visible until **Continue**.
 5. Leave midway to resume later, or complete the session and view results. Log out and sign in from another browser; **History** retains completed and unfinished sessions.
 6. In **Account**, students can change their username or password. Their immutable account code and results stay attached to the same account.
 
@@ -80,6 +80,8 @@ python manage.py import_content
 The importer reuses `scripts/build.py` validation before writing, then imports in one PostgreSQL transaction with an advisory lock. It preserves all original payloads, stable `study_topic_id`, `subject_id`, globally unique `question_id`, subcategory IDs, source references, redirects, study prose, revision metadata, and attribution. Topic-local IDs such as `q1` are never persistence keys. Import counts are recorded in `ContentImport`.
 
 Original import inventory: 12 categories, 355 subcategories, 7,072 category-specific topics, 6,906 shared subjects, 1,006 detailed study pages, 10,976 questions, 4,383 tournament source units, and 13 redirects.
+
+The current question inventory is **26,923**: the original **10,976 multiple-choice** questions in `data/practice/` plus **15,947 typed/recall** questions in `data/typed-questions.json`. The latter is the approved GPT-6 Luna/xhigh run with giveaway follow-up corrections. It contains only stable IDs, question stems, and answers; runtime imports do not require research files or API access.
 
 There are now 2,335 detailed study pages: the original 1,006, 390 GPT-6 Sol additions, and 939 GPT-6 Luna additions. All previously unenriched topics with at least two original tournament sources are complete; the remaining 4,737 each have one source. Accepted additions and their citations live in `data/content.json`. Run `python3 scripts/enrich_topics.py status` for current coverage. [Content maintenance](docs/CONTENT_WORKFLOW.md) explains the local-only research workspace and resumable queue. Raw responses, drafts, and review logs are retained locally under ignored `research/`, outside Git and production packages.
 
@@ -181,21 +183,22 @@ Type at least two characters for up to five suggestions. Arrow keys highlight a 
 
 The server grades against the session's pinned revision. Normalized exact answers earn one point. Meaningful partial answers, very close full spellings, and directly entered suppressed wording variants prompt “Not quite, but close — try again!” Prompts preserve the entered text without saving an answer, awarding XP, counting weekly participation, updating reviews, or completing a session. Repeated prompts are allowed. Finalized text is retained in feedback, history, and administrator results. A finalized skip follows the existing participation policy: it counts as an attempted question for XP and weekly goals, subject to the same stable-question/day limits across all modes, and schedules an unsuccessful review.
 
-Each primary category has a content-addressed answer bank containing every eligible current question's correct answer and distractors. Imports rebuild current bank pointers in the content transaction; unchanged banks reuse their digest. Each typed session item pins an immutable bank alongside its question revision. Old banks remain protected while referenced. Subcategory/topic/search filters restrict questions, not their category suggestion banks. No candidate-review aliases, semantic matching, phonetics, AI calls, or sibling-repository runtime dependencies are used.
+Each primary category has a content-addressed answer bank containing every eligible current typed question's answer. Older datasets without a dedicated typed bank retain the original correct-answer/distractor fallback. Imports rebuild current bank pointers in the content transaction; unchanged banks reuse their digest. Each typed session item pins an immutable bank alongside its question revision. Old banks remain protected while referenced. Subcategory/topic/search filters restrict questions, not their category suggestion banks. No candidate-review aliases, semantic matching, phonetics, AI calls, or sibling-repository runtime dependencies are used.
 
 The explorer's NFD normalization, search scores, transpositions, numeric safeguards, and conservative wording suppression are ported in `static/typed-matching.js` and `scholars/typed_answers.py`. Wording variants remain searchable but display the question's exact answer; this does not merge source content or mutate the shared bank. The server prepares the question's suggestion view and sends only display/search data. Browser searches make no network requests. Bounded server caches retain at most 24 bank indexes and 32 prepared question views, keyed by immutable content. JavaScript/Python shared fixtures verify normalization, filtering, and grading parity; suggestion ranking stays in the browser.
 
 Typed practice has independent review evidence, readiness, due/weak/new selection, objective accuracy, and random-session bests. The existing multiple-choice coverage table remains explicitly labeled; typed accuracy appears in its separate review summary. Corrected previous misses are mode-specific, and the revisit list retains misses in either objective mode. Typed bests also include category-bank versions in their comparison keys because changed suggestions can affect difficulty. Historical classifications and evidence are not backfilled.
 
-### Upgrade
+### Upgrade to the dedicated typed-question bank
 
 ```sh
 source .venv/bin/activate
 python manage.py migrate
+python manage.py import_content
 python manage.py check
 ```
 
-Migrations `0004` and `0005` add banks and typed/skip fields, expand answer-record constraints, initialize banks from already imported current revisions, and change the default for new sessions. No re-import is required. Future edits to authoritative `data/` still use `python manage.py import_content`. Old recognition/recall records are preserved. Do not run older application code against a database containing typed sessions; use the existing matched code/database restore procedure.
+Migration `0006` adds question format, defaulting existing questions to multiple choice. The import preserves those IDs/revisions and adds the new bank. New typed and self-assessed recall sessions use the new questions; multiple choice uses the originals. Existing sessions keep their pinned questions, answers, banks, and results. Old typed/recall review records remain in history but do not enter the new bank's due/readiness counts. The new questions start fresh review evidence. Do not restart older code after importing the new payloads: it assumes every question has distractors. See [the server update guide](UPDATE_DEPLOYMENT.md).
 
 Validation on September 24, 2026: the PostgreSQL backend suite, migration upgrade test, 5 Python content/build tests, and 7 Node tests passed; system, migration, and diff checks were clean. Chrome verified prompts → suggestions → direct Saturn variant prompt → keyboard completion → persistent feedback → Continue/results, separate-device resume/history, 320px layouts, reduced motion, and ordinary forms with JavaScript disabled. The isolated validation database contained typed, skipped, recognition, recall, and abandoned records; a PostgreSQL dump/restore matched all 25 public tables' counts and checksums. No real student records or deployment were changed. Migrations were exercised in isolated databases; run the upgrade above for an existing local application database.
 
@@ -213,12 +216,15 @@ The largest category contains 5,549 answers. `node tests/typed-benchmark.js` mea
 - `tests/`: dataset/build, research-tooling, release-boundary, and JavaScript regression tests; they do not require the local research archive.
 - `docs/`: concise maintenance and repository/release guidance.
 
-The production server receives a package of committed application files, not the
-whole repository. Tests, research tooling, planning documents, and the legacy
-static interface remain useful in Git but are excluded from that package. See
-[repository boundaries and release packaging](docs/REPOSITORY_LAYOUT.md).
+The preferred server workflow uses a permanent Git checkout and `git pull`. The existing packaged deployment can be converted once using [UPDATE_DEPLOYMENT.md](UPDATE_DEPLOYMENT.md). Release packaging remains available as an alternative; see [repository boundaries](docs/REPOSITORY_LAYOUT.md).
 
 ## Validation
+
+September 25, 2026 question-bank integration: **119 Django tests, 69 Python tests,
+and 9 JavaScript tests passed**. Coverage includes repeat imports of all 26,923
+questions, separate mode selection/readiness, migration defaults, unchanged
+multiple-choice payloads, and scoring/resuming pinned legacy sessions after the
+new bank is imported. System and migration checks pass.
 
 Run the backend tests against PostgreSQL, then the existing checks:
 
@@ -245,4 +251,4 @@ The original static preview remains available with `python scripts/serve.py` at 
 
 See [ATTRIBUTION.md](ATTRIBUTION.md), **Content attribution** in the application footer, and the citations on topic and saved-question pages. Tournament texts retain original source attribution; no blanket third-party license is asserted.
 
-[WEBSITE_PLAN.md](WEBSITE_PLAN.md) records implementation status and deferred work. Live DigitalOcean deployment, off-server backups/alerts, the student pilot, review-based badges, and standardized challenge mode remain later work. Production configuration and local HTTPS/restore drills are now included; see [DEPLOYMENT.md](DEPLOYMENT.md). No external analytics, AI generation service, or identity provider was added.
+[WEBSITE_PLAN.md](WEBSITE_PLAN.md) records implementation status and deferred work. Off-server backups/alerts, the student pilot, review-based badges, and standardized challenge mode remain operational or later work to confirm with the owner. Production configuration and local HTTPS/restore drills are now included; see [DEPLOYMENT.md](DEPLOYMENT.md). No external analytics, AI generation service, or identity provider was added.

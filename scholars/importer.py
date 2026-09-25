@@ -4,6 +4,8 @@ import json
 from django.core.exceptions import ValidationError
 from django.db import connection, transaction
 from scripts.build import load_and_validate
+from scripts.typed_content import load_typed_questions
+from django.conf import settings
 from .models import Category, ContentImport, Question, QuestionRevision, Source, Subcategory, Topic, TopicRedirect
 
 CONTENT_LOCK = 740291
@@ -21,11 +23,15 @@ def import_content(data_dir=None, allow_retire=False):
     # All validation precedes any database write, using the existing build validator.
     data = load_and_validate(data_dir)
     taxonomy, topics, content, sources, practice, redirects = data
+    typed = load_typed_questions(data_dir or settings.BASE_DIR / 'data', topics, practice)
+    multiple_choice_count = len(practice)
+    practice = practice + typed
     if not topics or not practice:
         raise ValidationError("Empty content imports are not allowed.")
     counts = dict(categories=len(taxonomy["categories"]), subcategories=len(taxonomy["subcategories"]),
                   topics=len(topics), subjects=len({t["subject_id"] for t in topics}), detailed_pages=len(content),
-                  practice_questions=len(practice), source_questions=len(sources), redirects=len(redirects))
+                  practice_questions=len(practice), multiple_choice_questions=multiple_choice_count,
+                  typed_questions=len(typed), source_questions=len(sources), redirects=len(redirects))
     topic_map = {t["study_topic_id"]: t for t in topics}
     incoming = [(Category, {c["primary_category"] for c in taxonomy["categories"]}),
                 (Subcategory, {s["subcategory_id"] for s in taxonomy["subcategories"]}),
@@ -43,9 +49,12 @@ def import_content(data_dir=None, allow_retire=False):
             if tid in topic_map and topic_map[tid]["subject_id"] != subject:
                 raise ValidationError(f"Cannot reuse topic identity {tid} for a different subject.")
         question_topics = {q["question_id"]: q["study_topic_id"] for q in practice}
-        for qid, tid in Question.objects.values_list("id", "topic_id"):
+        question_formats = {q["question_id"]: q.get("format", "multiple_choice") for q in practice}
+        for qid, tid, format in Question.objects.values_list("id", "topic_id", "format"):
             if qid in question_topics and question_topics[qid] != tid:
                 raise ValidationError(f"Cannot move question identity {qid} to a different topic.")
+            if qid in question_formats and question_formats[qid] != format:
+                raise ValidationError(f"Cannot change question format for identity {qid}.")
         upsert(Category, [Category(id=c["primary_category"], payload=c) for c in taxonomy["categories"]], ["payload", "active"])
         upsert(Subcategory, [Subcategory(id=s["subcategory_id"], category_id=s["primary_category"], payload=s)
                             for s in taxonomy["subcategories"]], ["category", "payload", "active"])
@@ -59,7 +68,7 @@ def import_content(data_dir=None, allow_retire=False):
             Topic.subcategories.through(topic_id=t["study_topic_id"], subcategory_id=sid)
             for t in topics for sid in t["subcategory_ids"]], batch_size=500)
         upsert(TopicRedirect, [TopicRedirect(id=old, topic_id=target) for old, target in redirects.items()], ["topic", "active"])
-        upsert(Question, [Question(id=q["question_id"], topic_id=q["study_topic_id"]) for q in practice], ["topic", "active"])
+        upsert(Question, [Question(id=q["question_id"], topic_id=q["study_topic_id"], format=q.get("format", "multiple_choice")) for q in practice], ["topic", "format", "active"])
         contexts = {tid: {"topic": t, "study_content": content.get(tid, {}),
                           "sources": {sid: sources[sid] for sid in t["source_ids"]}}
                     for tid, t in topic_map.items()}
@@ -79,5 +88,5 @@ def import_content(data_dir=None, allow_retire=False):
             model.objects.exclude(pk__in=ids).update(active=False)
         from .typed_answers import rebuild_banks
         rebuild_banks()
-        ContentImport.objects.create(digest=digest(data), counts=counts)
+        ContentImport.objects.create(digest=digest([data, typed]), counts=counts)
     return counts

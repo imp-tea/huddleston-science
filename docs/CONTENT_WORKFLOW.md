@@ -6,6 +6,15 @@ license/retrieval metadata are retained in `data/content.json`. Tournament
 questions and their attribution remain in `data/sources.json` and `data/topics.json`.
 The application and its importer do not read `research/`.
 
+The approved typed/recall question bank is versioned in
+`data/typed-questions.json` (15,947 questions). Original multiple-choice questions
+remain unchanged in `data/practice/` (10,976 questions). The importer validates
+both banks before writing, preserves stable IDs and pinned sessions, and rebuilds
+category autocomplete banks from current typed answers. A complete typed bank
+must cover every topic with 2–5 questions based on its source count. The raw
+generation/correction history remains local under ignored `research/typed-questions/`;
+the published site requires none of it. Runtime generation is not performed.
+
 As of September 24, 2026, there are 7,072 topics and 2,335 detailed study pages:
 1,006 original pages, 390 GPT-6 Sol additions, and 939 GPT-6 Luna additions.
 The remaining 4,737 topics each have one original tournament source ID. All

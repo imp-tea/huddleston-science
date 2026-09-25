@@ -4,6 +4,7 @@ from django.db.models import Count, F, Q, Subquery, OuterRef, Sum, Window
 from django.db.models.functions import RowNumber
 from django.utils import timezone
 from .models import Category, PracticeSession, Question, RewardEvent, SessionQuestion, StudyPreferences, StudyState, Subcategory, Topic
+from .question_pools import current_questions
 
 
 def session_totals(sessions):
@@ -36,13 +37,14 @@ def participation(user):
 
 def missed_topics(user, limit=5):
     # A success in one mode must not erase a miss in another mode.
-    questions = Question.objects.filter(active=True)
+    missed_ids = set()
     for mode in ("recognition", "typed"):
+        questions = current_questions(mode)
         latest = SessionQuestion.objects.filter(session__user=user, session__mode=mode,
             revision_id=OuterRef("current_revision_id"), answered_at__isnull=False).order_by("-answered_at", "-pk")
-        questions = questions.annotate(**{f"{mode}_correct": Subquery(latest.values("is_correct")[:1])})
-    missed = questions.filter(Q(recognition_correct=False) | Q(typed_correct=False))
-    return Topic.objects.filter(active=True, pk__in=missed.values("topic_id")).order_by("title")[:limit]
+        missed = questions.annotate(latest_correct=Subquery(latest.values("is_correct")[:1])).filter(latest_correct=False)
+        missed_ids.update(missed.values_list("topic_id", flat=True))
+    return Topic.objects.filter(active=True, pk__in=missed_ids).order_by("title")[:limit]
 
 
 def coverage(user, category="", subcategory=""):

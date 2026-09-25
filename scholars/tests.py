@@ -173,7 +173,9 @@ class PracticeTests(TestCase):
         topic = Topic.objects.exclude(study_content={}).first()
         response = self.client.get(reverse("scholars:topic", args=[topic.pk]))
         self.assertContains(response, "Study-note attribution")
-        self.assertContains(response, topic.study_content["source"]["title"])
+        source = topic.study_content["source"]
+        for reference in source.get("references", [source]):
+            self.assertContains(response, reference["title"])
         self.assertEqual(self.client.get(reverse("scholars:topic", args=["legacy-topic"])).status_code, 301)
 
     def test_category_change_clears_incompatible_subcategory(self):
@@ -336,11 +338,14 @@ class FullContentTests(TestCase):
         counts = import_content(root)
         expected = json.loads((root / "import-manifest.json").read_text())["counts"]
         self.assertGreaterEqual(counts["detailed_pages"], expected["detailed_pages"])
-        self.assertEqual({key: counts[key] for key in expected if key != "detailed_pages"},
-                         {key: value for key, value in expected.items() if key != "detailed_pages"})
+        self.assertEqual({key: counts[key] for key in expected if key not in {"detailed_pages", "practice_questions"}},
+                         {key: value for key, value in expected.items() if key not in {"detailed_pages", "practice_questions"}})
+        self.assertEqual(counts['multiple_choice_questions'], expected['practice_questions'])
+        self.assertEqual(counts['typed_questions'], 15947)
+        self.assertEqual(counts['practice_questions'], 26923)
         self.assertEqual(counts["subjects"], 6906)
         self.assertEqual(import_content(root), counts)
-        self.assertEqual(QuestionRevision.objects.count(), 10976)
+        self.assertEqual(QuestionRevision.objects.count(), 26923)
         self.assertEqual({t.pk: t.payload for t in Topic.objects.all()},
                          {t["study_topic_id"]: t for t in json.loads((root / "topics.json").read_text())})
         self.assertEqual({s.pk: s.payload for s in Source.objects.all()}, json.loads((root / "sources.json").read_text()))
@@ -351,8 +356,12 @@ class FullContentTests(TestCase):
         self.assertEqual({s.pk: s.payload for s in Subcategory.objects.all()}, {s["subcategory_id"]: s for s in taxonomy["subcategories"]})
         for topic in Topic.objects.prefetch_related("subcategories"):
             self.assertEqual({s.pk for s in topic.subcategories.all()}, set(topic.payload["subcategory_ids"]))
-        self.assertEqual({q.pk: q.current_revision.payload for q in Question.objects.select_related("current_revision")},
+        self.assertEqual({q.pk: q.current_revision.payload for q in Question.objects.filter(format='multiple_choice').select_related("current_revision")},
                          {q["question_id"]: q for p in (root / "practice").glob("*.json") for q in json.loads(p.read_text())})
+        approved = json.loads((root / 'typed-questions.json').read_text())
+        self.assertEqual({q.pk: (q.current_revision.payload['question'], q.current_revision.payload['correct_answer'])
+                          for q in Question.objects.filter(format='typed').select_related('current_revision')},
+                         {q['question_id']: (q['question'], q['answer']) for q in approved})
 
 
 class ConcurrentPracticeTests(TransactionTestCase):
