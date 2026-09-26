@@ -47,9 +47,19 @@ def load_and_validate(data_dir=None):
             require([p['label'] for p in source['parts']] == ['L', 'A', 'B', 'C'], f'Broken bonus grouping: {sid}')
     require(set(content) <= topic_map.keys(), 'Unknown content topic')
     for tid, c in content.items():
-        require(bool(c['overview']) and bool(c['key_facts']), f'Empty study page: {tid}')
+        generated = c['source'].get('kind') == 'model_generated'
+        require(bool(c['overview']) and isinstance(c['key_facts'], list), f'Empty study page: {tid}')
         references = c['source'].get('references', [c['source']])
-        require(bool(references), f'Missing study sources: {tid}')
+        if generated:
+            require(len(c['overview']) == 1 and not c['key_facts'] and references == [],
+                    f'Invalid generated paragraph: {tid}')
+            require(c['source'].get('model') == 'gpt-6-sol' and
+                    c['source'].get('web_search_used') is False and
+                    bool(c['source'].get('generated_at')),
+                    f'Missing generation provenance: {tid}')
+        else:
+            require(bool(c['key_facts']), f'Empty study page: {tid}')
+            require(bool(references), f'Missing study sources: {tid}')
         for source in references:
             require(all(source.get(k) for k in ['title', 'url', 'publisher']), f'Missing attribution: {tid}')
             require(source['url'].startswith(('https://', 'http://')), f'Invalid citation URL: {tid}')

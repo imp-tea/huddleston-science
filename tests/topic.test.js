@@ -28,3 +28,13 @@ test('original licensed study notes still link to their recorded license and rev
   assert(html.includes(study.source.license_url));
   assert(html.includes(`oldid=${study.source.revision.revid}`));
 });
+
+test('generated paragraphs render without empty facts or invented citations', () => {
+  const topic = topics.find(t => content[t.study_topic_id]?.source.kind === 'model_generated');
+  assert(topic);
+  const html = topicHTML({...topic, study_content: content[topic.study_topic_id]}, new URLSearchParams(), {topics}, subs);
+  assert(html.includes('Overview'));
+  assert(!html.includes('Key facts'));
+  assert(!html.includes('Source:'));
+  assert(!html.includes('undefined'));
+});

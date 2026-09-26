@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from tempfile import TemporaryDirectory
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -48,6 +49,20 @@ class BuildTests(unittest.TestCase):
             self.assertNotIn('source_ids',t)
             self.assertNotIn('description',t)
         self.assertLess(self.stats['browse_index_bytes'],2_000_000)
+
+    def test_generated_paragraphs_require_explicit_provenance(self):
+        tid = next(k for k, v in self.content.items() if v['source'].get('kind') == 'model_generated')
+        for field in ('kind', 'model', 'web_search_used', 'generated_at'):
+            with self.subTest(field=field), TemporaryDirectory() as temporary:
+                data = Path(temporary)
+                for original in (ROOT/'data').iterdir():
+                    if original.name != 'content.json':
+                        (data/original.name).symlink_to(original, target_is_directory=original.is_dir())
+                content = json.loads(json.dumps(self.content))
+                del content[tid]['source'][field]
+                (data/'content.json').write_text(json.dumps(content))
+                with self.assertRaises(ValueError):
+                    load_and_validate(data)
 
     def test_deployment_contains_only_public_files(self):
         self.assertTrue((OUT/'.nojekyll').exists())

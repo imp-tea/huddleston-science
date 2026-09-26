@@ -15,11 +15,23 @@ must cover every topic with 2–5 questions based on its source count. The raw
 generation/correction history remains local under ignored `research/typed-questions/`;
 the published site requires none of it. Runtime generation is not performed.
 
-As of September 24, 2026, there are 7,072 topics and 2,335 detailed study pages:
-1,006 original pages, 390 GPT-6 Sol additions, and 939 GPT-6 Luna additions.
-The remaining 4,737 topics each have one original tournament source ID. All
-previously unenriched topics with at least two source IDs have been enriched.
-Original topic IDs, questions, and existing study pages were preserved.
+As of September 26, 2026, all 7,072 topics have expanded study content:
+2,335 existing detailed pages and 4,737 new paragraph-only descriptions.
+The latter were generated with GPT-6 Sol, low reasoning, and no tools through
+the Batch API. Every request included one original tournament source and two
+approved typed quiz questions, along with topic metadata and its descriptor.
+Existing pages, topic descriptors, source questions, and both quiz banks were
+preserved.
+
+Paragraph-only entries have one overview block, an empty `key_facts` list, and
+`source.kind = "model_generated"` with model/date provenance, no references,
+and `web_search_used = false`. Do not attach invented citations or imply that
+these entries received external research. All 4,737 outputs passed basic
+structural checks; the full set has not received a factual or quiz-coverage audit.
+The six-topic pilot received a separate source review. Full-batch generation
+cost was estimated from usage at $5.755255, not reconciled to an invoice.
+The frozen requests, original responses, and import ledger are retained locally
+under `research/topic-enrichment/sol-no-tools-batch-2026-09-26/`.
 
 ## Local-only workspace
 
@@ -52,7 +64,7 @@ or authorize API spending. Do not initialize over the existing research history.
 ## Research and acceptance
 
 Research instructions for the existing queue are retained in the local
-`research/topic-enrichment/README.md`. For future work:
+`research/topic-enrichment/README.md`. For future work using the externally researched workflow (the authorized no-tools batch above is a separate workflow):
 
 - Give each researcher the exact topic ID, category, and original question context
   for disambiguation. Question text is context, not verified evidence.
@@ -70,8 +82,7 @@ Research instructions for the existing queue are retained in the local
 The Luna run used one independently researched topic per request. The pilot had
 a separate 12-topic audit; the full 939-topic set did not. Known factual and
 citation corrections were applied before import. API usage for the pilot and
-subsequent run was estimated at $20.64, not reconciled to an invoice. No further
-API generation is currently authorized for the one-source backlog.
+subsequent run was estimated at $20.64, not reconciled to an invoice. The subsequent one-source Batch run was separately authorized and is documented above.
 
 ## Credential hygiene
 
