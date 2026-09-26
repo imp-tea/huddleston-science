@@ -48,16 +48,11 @@ class ProgressTests(TestCase):
         index = item.choices.index(item.revision.payload['correct_answer'])
         return answer_question(session.user, session.pk, position, index if correct else (index + 1) % 4)
 
-    def test_opening_records_visit_without_studied_or_xp(self):
+    def test_explore_does_not_create_legacy_study_markers_or_xp(self):
         url = reverse('scholars:topic', args=[self.single.pk])
-        self.client.get(url)
-        first = StudyState.objects.get(user=self.user, topic=self.single)
-        self.assertIsNone(first.studied_at)
-        self.client.get(url)
-        state = StudyState.objects.get(user=self.user, topic=self.single)
-        self.assertEqual(state.first_opened_at, first.first_opened_at)
-        self.assertGreaterEqual(state.last_opened_at, first.last_opened_at)
-        self.assertEqual(StudyState.objects.count(), 1)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(StudyState.objects.count(), 0)
         self.assertEqual(RewardEvent.objects.count(), 0)
 
     def test_explicit_study_marker_is_idempotent_and_can_be_undone(self):
@@ -82,7 +77,7 @@ class ProgressTests(TestCase):
             self.assertEqual(Client().post(path).status_code, 302)
         self.user.must_change_password = True
         self.user.save(update_fields=['must_change_password'])
-        for path in paths + [reverse('scholars:progress')]:
+        for path in paths + [reverse('scholars:legacy_progress')]:
             self.assertRedirects(self.client.get(path), reverse('password_change'), fetch_redirect_response=False)
 
     def test_study_and_preferences_persist_across_rename_and_new_browser(self):
@@ -92,7 +87,7 @@ class ProgressTests(TestCase):
         self.client.post(reverse('logout'))
         device = Client()
         self.assertTrue(device.login(username='renamed-learner', password=PASSWORD))
-        response = device.get(reverse('scholars:progress'))
+        response = device.get(reverse('scholars:legacy_progress'))
         self.assertEqual(response.context['coverage']['total']['studied'], 1)
         self.assertEqual(response.context['participation']['weekly_goal'], 20)
         self.assertFalse(StudyPreferences.objects.filter(user=self.other).exists())
@@ -100,7 +95,7 @@ class ProgressTests(TestCase):
     def test_progress_is_private_and_admin_can_read_student_progress(self):
         mark_studied(self.other, self.single, True)
         self.answer(self.session(user=self.other))
-        response = self.client.get(reverse('scholars:progress'), {'user': self.other.pk})
+        response = self.client.get(reverse('scholars:legacy_progress'), {'user': self.other.pk})
         self.assertEqual(response.context['coverage']['total']['studied'], 0)
         self.assertEqual(response.context['participation']['xp'], 0)
         url = reverse('scholars:student_progress', args=[self.other.pk])
@@ -118,7 +113,7 @@ class ProgressTests(TestCase):
         self.single.save(update_fields=['payload'])
         mark_studied(self.user, self.single, True)
         scope = {'q': 'unique-library-alias', 'status': 'studied', 'category': self.single.category_id}
-        response = self.client.get(reverse('scholars:library'), scope)
+        response = self.client.get(reverse('scholars:legacy_library'), scope)
         self.assertEqual([t.pk for t in response.context['topics']], [self.single.pk])
         session = self.session(scope)
         self.assertEqual(session.total, 1)
@@ -307,13 +302,13 @@ class ProgressTests(TestCase):
     def test_progress_with_records_and_pagination_renders(self):
         mark_studied(self.user, self.single, True)
         self.answer(self.session())
-        response = self.client.get(reverse('scholars:progress'))
+        response = self.client.get(reverse('scholars:legacy_progress'))
         self.assertContains(response, 'Personal bests')
         self.assertContains(response, 'Recently opened')
         self.assertContains(response, self.single.title)
-        response = self.client.get(reverse('scholars:progress'), {'category': self.single.category_id, 'page': 99})
+        response = self.client.get(reverse('scholars:legacy_progress'), {'category': self.single.category_id, 'page': 99})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(self.client.get(reverse('scholars:dashboard')), '2 XP')
+        self.assertContains(self.client.get(reverse('scholars:legacy_practice')), '2 XP')
 
     def test_repeat_import_preserves_study_markers_rewards_and_personal_bests(self):
         mark_studied(self.user, self.single, True)

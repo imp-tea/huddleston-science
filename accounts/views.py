@@ -57,7 +57,8 @@ def account(request):
         else:
             messages.success(request, "Username updated.")
             return redirect("account")
-    return render(request, "accounts/account.html", {"form": form})
+    from scholars.study_views import interests_form
+    return render(request, "accounts/account.html", {"form": form, "interests_form": interests_form(request.user)})
 
 
 @sensitive_post_parameters()

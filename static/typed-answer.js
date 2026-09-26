@@ -21,7 +21,7 @@ function highlight() {
 function complete(i) {
   input.value = matches[i].text; close();
   status.classList.remove('answer-prompt');
-  status.textContent = 'Answer selected. Press Enter or Check answer to submit.';
+  status.textContent = 'Answer selected. Press Enter or the submit button to submit.';
   input.focus();
 }
 function suggest() {

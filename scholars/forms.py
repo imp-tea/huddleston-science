@@ -43,5 +43,37 @@ class TypedAnswerForm(forms.Form):
     def clean(self):
         data = super().clean()
         if data.get("action") != "skip" and not data.get("typed_answer", "").strip():
-            self.add_error("typed_answer", "Enter an answer, choose a suggestion, or skip this question.")
+            self.add_error("typed_answer", "Enter an answer or skip this question.")
+        return data
+
+
+class InterestsForm(forms.Form):
+    categories = forms.MultipleChoiceField(label="Study categories", widget=forms.CheckboxSelectMultiple,
+                                           error_messages={"required": "Select at least one category."})
+
+    def __init__(self, *args, **kwargs):
+        from .models import Category
+        super().__init__(*args, **kwargs)
+        self.fields["categories"].choices = [(c.pk, c.pk) for c in Category.objects.filter(active=True).order_by("pk")]
+
+
+class StudyStartForm(forms.Form):
+    request_key = forms.UUIDField(widget=forms.HiddenInput)
+    subcategory = forms.CharField(max_length=100, widget=forms.HiddenInput)
+
+
+class ReadingMoveForm(forms.Form):
+    version = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
+    direction = forms.ChoiceField(choices=[("back", "Back"), ("next", "Next")])
+
+
+class StudyAnswerForm(forms.Form):
+    typed_answer = forms.CharField(label="Your answer", max_length=240, required=False, strip=False,
+        widget=forms.TextInput(attrs={"autocomplete": "off", "spellcheck": "false", "autocapitalize": "off", "aria-describedby": "answer-help answer-status", "autofocus": True}))
+    action = forms.ChoiceField(choices=[("answer", "Answer"), ("skip", "Skip")])
+
+    def clean(self):
+        data = super().clean()
+        if data.get("action") != "skip" and not data.get("typed_answer", "").strip():
+            self.add_error("typed_answer", "Enter an answer or skip this question.")
         return data

@@ -168,11 +168,12 @@ class PracticeTests(TestCase):
         self.assertEqual(session.answered, session.total)
 
     def test_library_topics_attribution_and_redirects_render(self):
-        for route in ["home", "scholars:dashboard", "scholars:library", "scholars:history", "scholars:attribution"]:
+        self.assertRedirects(self.client.get(reverse("scholars:dashboard")), reverse("scholars:interests"))
+        for route in ["home", "scholars:legacy_practice", "scholars:library", "scholars:history", "scholars:attribution"]:
             self.assertEqual(self.client.get(reverse(route)).status_code, 200)
         topic = Topic.objects.exclude(study_content={}).first()
         response = self.client.get(reverse("scholars:topic", args=[topic.pk]))
-        self.assertContains(response, "Study-note attribution")
+        self.assertContains(response, "Reading sources &amp; attribution")
         source = topic.study_content["source"]
         for reference in source.get("references", [source]):
             self.assertContains(response, reference["title"])

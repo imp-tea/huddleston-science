@@ -72,7 +72,8 @@ class AccountTests(TestCase):
         values = {"old_password": "wrong", "new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
         self.assertEqual(self.client.post(reverse("password_change"), values).status_code, 200)
         values["old_password"] = TEMP_PASSWORD
-        self.assertRedirects(self.client.post(reverse("password_change"), values), reverse("scholars:dashboard"))
+        self.assertRedirects(self.client.post(reverse("password_change"), values), reverse("scholars:dashboard"), fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(reverse("scholars:dashboard")), reverse("scholars:interests"))
         self.student.refresh_from_db()
         self.assertFalse(self.student.must_change_password)
         self.assertTrue(self.student.check_password(NEW_PASSWORD))

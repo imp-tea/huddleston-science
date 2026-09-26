@@ -1,14 +1,26 @@
 from django.urls import path
-from . import views
+from . import views, study_views, discovery_views
 
 app_name = "scholars"
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
-    path("library/", views.library, name="library"),
+    path("", study_views.home, name="dashboard"),
+    path("interests/", study_views.interests, name="interests"),
+    path("study/", study_views.study, name="study"),
+    path("study/start/", study_views.start, name="study_start"),
+    path("study/<uuid:pk>/", study_views.session_view, name="study_session"),
+    path("study/<uuid:pk>/review/<str:topic_id>/", study_views.passed_review, name="study_passed_review"),
+    path("study/<uuid:pk>/read/", study_views.read, name="study_read"),
+    path("study/<uuid:pk>/answer/<int:answer_id>/", study_views.answer, name="study_answer"),
+    path("study/<uuid:pk>/feedback/<int:answer_id>/", study_views.feedback, name="study_feedback"),
+    path("study/<uuid:pk>/restart/", study_views.restart, name="study_restart"),
+    path("practice/progress/", views.progress, name="legacy_progress"),
+    path("practice/library/", views.library, name="legacy_library"),
+    path("practice/", views.dashboard, name="legacy_practice"),
+    path("library/", discovery_views.library, name="library"),
     path("attribution/", views.attribution, name="attribution"),
-    path("topics/<str:pk>/", views.topic, name="topic"),
+    path("topics/<str:pk>/", discovery_views.topic, name="topic"),
     path("topics/<str:pk>/studied/", views.studied, name="studied"),
-    path("progress/", views.progress, name="progress"),
+    path("progress/", discovery_views.progress, name="progress"),
     path("progress/goal/", views.goal, name="goal"),
     path("progress/students/<uuid:pk>/", views.student_progress, name="student_progress"),
     path("practice/start/", views.start, name="start"),

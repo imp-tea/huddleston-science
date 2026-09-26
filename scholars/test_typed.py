@@ -154,10 +154,9 @@ class TypedPracticeTests(TestCase):
             old_bank = item.answer_bank_id
             response = self.post(session, typed_answer='Rings of Saturn')
             self.assertContains(response, 'Not quite, but close — try again!')
-            entries = response.context['suggestion_data']['index']
-            self.assertNotIn('Rings of Saturn', [x['text'] for x in entries])
-            self.assertEqual(next(r['text'] for r in entries if r['key'] == 'rings of saturn'), "Saturn's rings")
-            self.assertEqual(set(entries[0]), {'text', 'key', 'parts'})
+            self.assertNotContains(response, 'typed-bank')
+            self.assertNotContains(response, "Saturn&#x27;s rings")
+            self.assertIsNone(response.context.get('suggestion_data'))
             q['correct_answer'] = 'New answer'
             q['distractors'] = ['New one', 'New two', 'New three']
             Path(directory, 'practice/01.json').write_text(json.dumps(data['practice/01.json']))

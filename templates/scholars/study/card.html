@@ -1,0 +1,4 @@
+{% load study_design %}<article class="reading-card" style="{{ card.category|category_style }}"><span class="category-label">{{ card.category }}</span><h1>{{ card.title }}</h1>
+{% if card.overview %}{% for block in card.overview %}{% if forloop.first %}<p class="lede">{{ block.text }}</p>{% else %}<div class="overview"><p>{{ block.text }}</p></div>{% endif %}{% endfor %}{% else %}<p class="lede">{{ card.description }}</p>{% endif %}
+{% if card.facts %}<aside class="fact-box"><h2 class="eyebrow">Key facts</h2><ul>{% for fact in card.facts %}<li>{{ fact.text }}</li>{% endfor %}</ul></aside>{% endif %}
+<details class="reading-sources"><summary>Reading sources &amp; attribution</summary>{% for reference in card.references %}<a href="{{ reference.url }}" target="_blank" rel="noopener noreferrer">{{ reference.title }} ↗</a>{% endfor %}<a href="{% url 'scholars:attribution' %}" target="_blank" rel="noopener">Content attribution ↗</a></details></article>

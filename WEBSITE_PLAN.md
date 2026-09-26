@@ -1,3 +1,5 @@
+> The completed September 2026 Scholars Bowl redesign in [docs/SCHOLARS_BOWL_REDESIGN.md](docs/SCHOLARS_BOWL_REDESIGN.md) supersedes the student flows below. See [phase-four validation](docs/SCHOLARS_BOWL_PHASE4.md) and README.md for current behavior.
+
 # Huddleston Science website plan
 
 Status: Overall direction approved by the repository owner. Milestones 1–3 are implemented and validated locally; live deployment and the owner-led student pilot remain deferred.

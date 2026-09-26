@@ -1,0 +1,8 @@
+{% load study_design %}<form action="{% url 'scholars:interests' %}" method="post" class="interests-form">{% csrf_token %}
+{% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+{{ interests_form.non_field_errors }}{{ interests_form.categories.errors }}
+<fieldset><legend class="sr-only">Study categories</legend>
+<button type="button" class="text-button" data-select-all>Select all categories</button>
+<div class="interest-grid">{% for choice in interests_form.categories %}<label class="interest-option" style="{{ choice.choice_label|category_style }}">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div></fieldset>
+<p class="muted">Select at least one category. Changes apply to your next selection; your current session and completed topics are kept.</p>
+<button class="primary-button" type="submit">Save interests →</button></form>

@@ -1,17 +1,37 @@
-# Deploy this update, then use Git pull for future updates
+# Deploy the Scholars Bowl redesign
 
-Your server currently runs an extracted package at
+## Choose the path that matches the server
+
+The original deployment ran an extracted package at
 `/srv/huddleston/releases/dd545cec8c9e`, through the
-`/srv/huddleston/current` symlink. It is not a Git checkout.
+`/srv/huddleston/current` symlink. That package is not a Git checkout.
+
+After committing and pushing in step 1, check the current server path over SSH:
+
+```sh
+readlink -f /srv/huddleston/current
+```
+
+- If it is `/srv/huddleston/app`, the one-time conversion is already done. Use
+  **Existing checkout updates** below, then step 7 to check the site.
+- If it is `/srv/huddleston/releases/dd545cec8c9e`, follow steps 2–7 for the
+  one-time conversion.
+- If it is another path, inspect the layout before using either procedure.
 
 We will create **one permanent checkout at `/srv/huddleston/app`** and point
 `current` there. After that, update this same checkout with `git pull`; do not
 clone into a new directory or make a release archive for each update.
 
 The `huddleston` service, database, `/etc/huddleston/site.env`, static directory,
-and Caddy configuration stay in place. This update adds migration
-`scholars.0006`, 15,947 typed/recall questions, and keeps all 10,976 multiple-choice
-questions. Existing accounts, sessions, answers, XP, and history are preserved.
+and Caddy configuration stay in place. The redesign adds migration
+`scholars.0007`; `scholars.0006` is also required if the typed-bank update has not
+yet been deployed. Together these provide typed questions, saved interests, resumable
+Study sessions, topic completions, and redesigned Progress/Explore. The 10,976
+original multiple-choice questions remain stored. Existing accounts, sessions, answers, XP, and history are preserved.
+
+The latest quiz uniqueness and optional-review fixes need no additional migration,
+dependency, environment variable, or service configuration. Deploy their Python,
+templates, and static files together. `collectstatic` is required for the redesign.
 
 Run the numbered steps separately. **If a command fails, stop at that step.**
 The parenthesized blocks stop on errors without closing your SSH connection.
@@ -20,23 +40,26 @@ No API key or question generation is needed on the server.
 ## 1. Commit and push on your Mac
 
 In GitHub Desktop, review and commit the changes, then **Push origin**.
-Suggested commit message: `Use dedicated typed-question bank with giveaway corrections`.
-Make sure the commit includes `data/typed-questions.json`, migration `0006`,
-the application changes, tests, scripts, and documentation.
+Suggested commit message: `Redesign Scholars Bowl study, progress, and exploration`.
+Include migration `0007`, the new Study modules and templates, static assets,
+account changes, tests, and documentation. The existing typed-bank data and
+migration `0006` must remain in the repository.
 
 Alternatively, in your Mac's Terminal:
 
 ```sh
 cd ~/Desktop/huddleston-science
 git status --short
-git add README.md DEPLOYMENT.md FIRST_DEPLOYMENT.md UPDATE_DEPLOYMENT.md ATTRIBUTION.md docs data/typed-questions.json scholars scripts tests
+git add -A
 git diff --cached --stat
-git commit -m "Use dedicated typed-question bank with giveaway corrections"
+git diff --cached --check
+git commit -m "Redesign Scholars Bowl study, progress, and exploration"
 git push origin main
 git rev-parse --short=12 HEAD
 ```
 
-Keep that last commit ID to compare with the server. `.env`, raw research
+Review the staged files before committing, including new files; omit any unrelated
+work. Keep that last commit ID to compare with the server. `.env`, raw research
 responses, local databases, and virtual environments remain ignored.
 
 ## 2. Connect to the server
@@ -70,8 +93,9 @@ The old site keeps running while you prepare this checkout.
 ```
 
 The commit ID must match your Mac. The two documented warnings `security.W005`
-and `security.W021` are expected. Investigate other errors. If the previous
-application is current, the only new migration should be `0006_question_format`.
+and `security.W021` are expected. Investigate other errors. Expect
+`0007_studypreferences_categories_and_more`, plus `0006_question_format` if the
+typed-bank update has not been applied. Already-applied migrations are skipped.
 
 If `/srv/huddleston/app` already exists, stop and inspect it rather than deleting
 it or cloning again. If Git is missing, install it with
@@ -172,31 +196,34 @@ curl --fail --silent --show-error -o /dev/null -w 'Login HTTP status: %{http_cod
 Expect `/srv/huddleston/app`, `active (running)`, and HTTP `200`.
 In your browser, sign in and:
 
-1. Start a **new typed-answer** session and answer using autocomplete.
-2. Start **multiple choice** and confirm it still offers four choices.
-3. Try **Recall · self-assessed**, reveal an answer, and save an assessment.
-4. Check History and resume an existing unfinished session.
-5. Check Progress's separate mode totals.
+1. Choose interests, start **Study**, and read the topic cards.
+2. Confirm Reroll appears above the subcategory cards. Start a five-topic quiz and check that its ten questions have unique prompts and answers (a genuinely smaller unique pool produces a shorter quiz). Type a misspelled or partial answer and check fuzzy autocomplete plus keyboard completion. Submit responses and check brief Correct/Incorrect feedback without revealing the correct answer after a miss. Confirm a failed quiz offers targeted rereading and a retry containing only missed or unseen questions; previously correct questions and duplicate variants must not return.
+3. Pass a quiz with 9/10; confirm the missed topic is listed for optional review, opens its reading card, and returns to the passed result without a retake. Confirm one completed session and its topic completions appear in **Progress**, with no extra credit from optional rereading.
+4. Leave during reading or a quiz, then resume from another browser. Starting over must preserve earlier completions.
+5. Browse **Explore**, follow a subcategory into a topic, and check its breadcrumb. Browsing must not change completion totals.
+6. Check **Study history & previous results** and Account interests. Existing legacy typed sessions and results remain; recognition/recall displays and reveals are retired.
 
-Resumed sessions intentionally keep their old questions and autocomplete banks.
-New typed/recall questions start with new review schedules. Old scores and review
-records are retained; they are not treated as attempts on the new questions.
+Migration 0007 does not convert old scores or manual markers into completions.
+Current Study sessions pin their original reading, questions, and grading banks.
+Keep migration 0007 and the new code together; do not roll back to older code or
+reverse the schema after new Study records have been created.
 
 Closing SSH does not stop the site. After the checks, make another backup and
 copy backups to your usual protected off-server destination.
 
-## Future updates — use this same checkout
+## Existing checkout updates — including this redesign
 
 First commit and push on your Mac. Then SSH in and run the following block.
 It checks for a clean checkout, records the previous commit, backs up, pulls,
-installs pinned dependencies, migrates, imports content, collects assets, and
-restarts. Schedule a maintenance window, and inspect/restore-test backups before
-future risky migrations as described in DEPLOYMENT.md.
+restore-tests the backup, installs pinned dependencies, shows pending migrations,
+migrates, imports content, collects assets, and restarts. Use a maintenance window.
+The restore check creates a temporary database and never restores over live data.
 
 ```sh
 (
   set -eu
   cd /srv/huddleston/app
+  test "$(readlink -f /srv/huddleston/current)" = /srv/huddleston/app
   test "$(git branch --show-current)" = main
   test -z "$(git status --porcelain)"
   git fetch origin
@@ -205,9 +232,19 @@ future risky migrations as described in DEPLOYMENT.md.
   git rev-parse HEAD > "$HOME/huddleston-previous-commit.txt"
   sudo systemctl stop huddleston
   sudo -u huddleston ./deploy/manage backup_database /var/backups/huddleston
+  (
+    set -eu
+    backup_file=$(sudo find /var/backups/huddleston -maxdepth 1 -type f -name '*.dump' | sort | tail -n 1)
+    test -n "$backup_file"
+    trap "sudo -u postgres psql -v ON_ERROR_STOP=1 -c 'ALTER ROLE huddleston NOCREATEDB;'" EXIT
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -c 'ALTER ROLE huddleston CREATEDB;'
+    sudo -u huddleston ./deploy/manage verify_database_backup "$backup_file"
+  )
   git pull --ff-only origin main
+  git rev-parse --short=12 HEAD
   .venv/bin/python -m pip install -r requirements-production.txt
   sudo -u huddleston ./deploy/manage check --deploy
+  sudo -u huddleston ./deploy/manage migrate --plan
   sudo -u huddleston ./deploy/manage migrate --noinput
   sudo -u huddleston ./deploy/manage import_content
   sudo -u huddleston ./deploy/manage collectstatic --noinput
@@ -216,7 +253,9 @@ future risky migrations as described in DEPLOYMENT.md.
 )
 ```
 
-If the clean-checkout or ancestry check fails, inspect `git status` and stop;
+Compare the deployed commit ID with your Mac's commit. Expect migration 0007
+on the first redesign deployment; the later quiz fixes add no further schema
+changes. If the clean-checkout or ancestry check fails, inspect `git status` and stop;
 do not discard changes with `reset --hard`. If a later command fails, the site
 may remain stopped. Fix the specific failure before restarting, and repeat
 step 7's checks after a successful update. No new checkout, archive, or symlink

@@ -15,7 +15,7 @@ from .forms import AnswerForm, RecallForm, TypedAnswerForm, GoalForm, SCOPE_FIEL
 from .models import Category, PracticeSession, RewardEvent, Source, StudyPreferences, StudyState, Subcategory, Topic, TopicRedirect
 from .progress import coverage, missed_topics, participation, personal_bests, session_totals
 from .reviews import review_summary
-from .services import abandon_session, reveal_question, answer_question, mark_studied, record_visit, start_session
+from .services import abandon_session, answer_question, mark_studied, record_visit, start_session
 
 
 def start_form(**scope):
@@ -107,11 +107,8 @@ def question_form(session, item, data=None):
 
 def render_question(request, session, item, form, *, prompt=False, status=200):
     context = {"session": session, "item": item, "form": form, "prompt": prompt}
-    if session.mode == "typed":
-        from .typed_answers import for_item
-        # Only searchable/display data; no answer key, correctness flags, or grading scores.
-        context["suggestion_data"] = {"version": item.answer_bank_id, "index": [
-            {key: entry[key] for key in ("text", "key", "parts")} for entry in for_item(item)["index"]]}
+    if session.mode != "typed":
+        return render(request, "scholars/legacy_format.html", context, status=status)
     return render(request, "scholars/question.html", context, status=status)
 
 
@@ -161,7 +158,8 @@ def feedback(request, pk, position):
 @login_required
 def history(request):
     return render(request, "scholars/history.html", {"sessions": Paginator(
-        session_totals(request.user.practice_sessions).order_by("-started_at"), 25).get_page(request.GET.get("page"))})
+        session_totals(request.user.practice_sessions).order_by("-started_at"), 25).get_page(request.GET.get("page")),
+        "study_sessions": Paginator(request.user.study_sessions.order_by("-started_at", "-pk"), 20).get_page(request.GET.get("study_page"))})
 
 
 @login_required
@@ -236,7 +234,7 @@ def goal(request):
     form = GoalForm(request.POST)
     if form.is_valid():
         StudyPreferences.objects.update_or_create(user=request.user, defaults=form.cleaned_data)
-        return redirect("scholars:progress")
+        return redirect("scholars:legacy_progress")
     context = progress_context(request.user, {})
     context["goal_form"] = form
     return render(request, "scholars/progress.html", context, status=400)
@@ -247,11 +245,7 @@ def goal(request):
 def reveal(request, pk, position):
     session = visible_session(request, pk)
     get_object_or_404(session.items, position=position)
-    try:
-        reveal_question(request.user, pk, position)
-    except ValidationError as exc:
-        return HttpResponseBadRequest("; ".join(exc.messages))
-    return redirect("scholars:session", pk=pk)
+    return HttpResponseBadRequest("Answer reveals are no longer available. Use Study for typed quizzes.")
 
 
 @login_required

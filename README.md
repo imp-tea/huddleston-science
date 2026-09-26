@@ -1,5 +1,23 @@
 # Huddleston Science
 
+The approved Scholars Bowl redesign is tracked in
+[the redesign plan](docs/SCHOLARS_BOWL_REDESIGN.md). **The redesign is implemented in Django:** saved category interests, a ten-subject picker, reading sessions, typed
+quizzes, targeted review/retries, and timestamped topic completions. Home, Account,
+Study, Progress, and Explore use the approved dark shell and light paper cards.
+Progress includes a five-session weekly goal, activity calendar, and topic
+coverage; Explore provides category/subcategory browsing and topic search.
+See [phase-two rollout notes](docs/SCHOLARS_BOWL_PHASE2.md) and
+[phase-three implementation notes](docs/SCHOLARS_BOWL_PHASE3.md).
+
+Run migrations and import the current typed-question data before using Study:
+`python manage.py migrate` then `python manage.py import_content`. Existing
+accounts and practice results are retained; old results and manual study markers
+are not converted into new topic completions. Final validation and polish are recorded in the phase-four notes below.
+
+The separate phase-one design preview remains available with
+`python3 prototypes/scholars-bowl/serve.py` at
+[port 8877](http://127.0.0.1:8877); it uses sample progress and resets on refresh.
+
 A Django/PostgreSQL classroom site with private, pseudonymous accounts and persistent Scholars Bowl practice. The complete journey is: administrator creates a student → student replaces a temporary password → completes a quiz → returns to saved results on another device.
 
 The original static site and educational content pipeline remain available. The Django application is now the classroom website; static `dist/` output does **not** include accounts or saved results. For the existing server, use the [Git checkout update guide](UPDATE_DEPLOYMENT.md).
@@ -51,14 +69,16 @@ To stop it, use the same `pg_ctl` executable with `-D .local/pgdata stop`. New c
 
 ## First classroom journey
 
-1. Log in as the administrator and open **Admin**. Create a pseudonymous username and a unique temporary password; deliver both to the student outside the website.
-2. Log out. Log in as the student. Every private route requires replacing the temporary password before continuing.
-3. Open **Scholars Bowl**, then **Start practice**, or browse a category/subcategory/topic and practice that scope.
-4. Type an answer and select **Check answer**. The server saves and scores finalized answers immediately. Feedback keeps the question, correct answer, available explanation, and source links visible until **Continue**.
-5. Leave midway to resume later, or complete the session and view results. Log out and sign in from another browser; **History** retains completed and unfinished sessions.
-6. In **Account**, students can change their username or password. Their immutable account code and results stay attached to the same account.
+1. The administrator creates a pseudonymous student account in **Admin** and delivers its temporary password outside the site.
+2. The student signs in and replaces the temporary password, then opens **Scholars Bowl** and chooses at least one category of interest.
+3. **Study** offers ten random subcategories, with **Reroll** above the cards to choose another set. Choose one, read up to five unfinished topics, and answer two typed questions per topic.
+4. Responses save individually. A spelling/specificity prompt lets the student try again; **Skip** records an incorrect response. Fuzzy autocomplete offers category-wide candidates as you type; arrow keys and Tab/Enter select a suggestion. Each finalized response briefly shows Correct or Incorrect without revealing the correct answer after a miss. A failed quiz requires rereading missed topics before another shuffled attempt.
+5. A score of at least 90% (rounded up for shorter sessions) completes every topic in that session. **Progress** shows topic coverage, a fixed five-session weekly goal, and five calendar weeks of activity. Dates use America/Chicago.
+6. Leave and return to **Study** to resume the saved reading or quiz position on any device. **Start New Session** abandons only the unfinished session; earned completions remain.
+7. **Explore** browses all active categories, subcategories, and topics, independent of interests. Search and reading never grant completion. **Account** changes interests, username, or password without losing progress.
+8. The footer's **Study history & previous results** retains Study sessions and older practice results.
 
-The administrator can view student results, reset passwords, disable/re-enable accounts, and delete a student with a separate confirmation page. Deletion permanently removes that student's answers and sessions; disabling preserves them. The sole administrator cannot be deleted, disabled, or demoted, including through ordinary database writes. A partial unique constraint prevents a second administrator. Before first bootstrap, there are zero administrators by design.
+The administrator can reset credentials, disable/re-enable accounts, and delete a student with confirmation. Deletion removes that student's sessions, answers, preferences, and completions; disabling preserves them. Existing administrator student-statistics pages still report legacy practice rather than the new Study totals. The sole administrator is protected against deletion, disabling, and demotion, including ordinary database writes.
 
 ### Recovery and authentication
 
@@ -85,7 +105,7 @@ The current question inventory is **26,923**: the original **10,976 multiple-cho
 
 There are now 2,335 detailed study pages: the original 1,006, 390 GPT-6 Sol additions, and 939 GPT-6 Luna additions. All previously unenriched topics with at least two original tournament sources are complete; the remaining 4,737 each have one source. Accepted additions and their citations live in `data/content.json`. Run `python3 scripts/enrich_topics.py status` for current coverage. [Content maintenance](docs/CONTENT_WORKFLOW.md) explains the local-only research workspace and resumable queue. Raw responses, drafts, and review logs are retained locally under ignored `research/`, outside Git and production packages.
 
-Repeated imports update current content without duplicating questions or deleting progress. Changes to a question, its topic/context, study notes, or source attribution create a new immutable-by-import question revision. Sessions pin the revision and shuffled choices at creation. Saved answers and even unfinished sessions keep the original text, correct answer, explanation, classifications, and attribution after an update. Historical **Sources for this question** displays that snapshot; **Study [topic]** opens the current study page.
+Repeated imports update current content without duplicating questions or deleting progress. Study sessions pin reading content, question revisions, and grading banks at creation. Imports and retirements do not change an unfinished session's reading or retry pool. Historical session evidence stays intact; Progress and Explore use current active topic membership. Topic completion is unique per student and stable topic ID, including topics in multiple subcategories. Separate records with the same subject ID are not merged.
 
 Imports refuse missing existing IDs unless explicitly reviewed and approved through:
 
@@ -95,114 +115,39 @@ python manage.py import_content --allow-retire
 
 This retires removed content from new practice; it does not delete it or student history. Reintroducing the same identity reactivates it. Reassigning a topic ID to a different subject or a question ID to a different topic is rejected. For an alternate complete dataset, use `--data-dir /path/to/data`. Never point this at generated `dist/`.
 
-Quizzes select up to ten distinct questions, including smaller pools, using server-side randomness. Category/subcategory joins are deduplicated. Scores are calculated exclusively from saved server revisions. A unique start token makes repeated start submissions idempotent; session row locks and unique question positions make duplicate/concurrent answers idempotent. The first recorded choice wins. Retrying after losing a response is safe. Every unfinished session remains resumable unless the student explicitly ends it; completed sessions have a completion timestamp. Each new session is retained separately, so repeat practice is distinguishable without treating it as mastery.
+## Study rules and retained history
 
-## Study and progress (Milestone 2)
+Each initial quiz aims for two typed questions per selected topic, ten for a five-topic session. Matching normalized prompts or answers are treated as duplicates across topics. Overlaps are replaced with other unique pinned questions; if the entire pool is too small, the quiz is shorter. Passing is 9/10 for ten questions, with 90% rounded up for shorter quizzes. When fewer than five unfinished topics remain, Study labels the shorter session and counts a pass as one session toward the weekly goal. Short topic descriptions are valid; enrichment does not gate participation. A topic needs at least two active typed questions to start a session.
 
-The site is designed for ages 12–18 and classes of up to 32. Pages use compact headings, ordinary controls, and short functional text. There are no hero sections, slogans, decorative category icons, or automatic celebrations. Class size is a planning assumption, not a 32-account cap; one administrator may manage more than one class.
+Failed attempts deduplicate missed topics for rereading. Retries include the preceding attempt's misses, then unseen pinned questions, up to the original quiz size. Questions answered correctly earlier in the session, including duplicate variants, never return. Quizzes can shrink below ten; the 90% threshold rounds up against the actual question count. No attempt contains duplicate questions; attempts are unlimited. A passing result still lists topics behind any missed answers, with optional rereading that preserves the pass and requires no further quiz. The server owns grading, order, authorization, and completion. Duplicate submissions preserve the first saved answer; stale reading pages cannot advance the session twice. Restart and concurrent submissions are serialized with account/session locks.
 
-- **Library** searches topic titles and aliases, with category, subcategory, and studied/practiced filters. **Practice these topics** uses all matching topics, not just the current page. The search and status filters also apply to the quiz.
-- Opening a topic records its first/last visit. **Mark studied** is an explicit, reversible marker; opening or answering a question never marks it studied. Shared subjects retain separate category-specific topic records.
-- **Progress** shows studied/practiced topic coverage and correct answers with their sample size over the last 30 days. Coverage denominators use current active topics. Accuracy retains the classification recorded with each answer. An answer contributes once to its category and overall accuracy even if it belongs to several subcategories. These are coverage/accuracy counts, not mastery claims.
-- **Topics to revisit** lists topics whose latest answer to a current question revision was incorrect. Answer feedback stays visible until Continue. A later correct answer to the same revision can be identified as previously missed; this is not evidence of spaced recall.
-- **Personal bests** compare only completed sessions with matching scope/filter values, mode, number of questions, and question-bank revisions. A 3/3 result never competes with a 9/10 result. Changed eligible content or a changed study-filter pool starts a separate comparison group. The first completed session establishes a record; a strictly higher score gets a small personal-best label. Ties do not trigger it. Questions within a scope are still sampled randomly; records are not standardized difficulty ratings.
-- Existing Milestone 1 sessions keep their answers/results. Their original full question pool was not recorded, so they remain outside the new personal-best comparisons. No speculative content versions are backfilled.
+Interests affect future choices. A current session keeps its original content and remains resumable even if its selected categories are retired. Empty categories are distinguished from completed content. Fully completed interests offer editing interests or Explore; there is no automatic spaced repetition.
 
-### Participation XP and optional goals
+The weekly goal counts passed Study sessions from Monday midnight through the next Monday in America/Chicago. Extra passes remain visible; the progress bar caps at 100%. Reading/quiz events shade the 35-day activity calendar but do not advance the goal. Current completion percentages exclude retired topics while historical evidence is retained.
 
-XP is awarded by the server in the same transaction as an answer, regardless of correctness:
+Older practice sessions, manual studied markers, XP, optional question goals, personal bests, and review evidence are preserved under previous results/statistics. They are not converted into Study completions and do not affect the new weekly goal. Legacy typed sessions remain resumable. Multiple-choice/recall displays and answer reveals are retired. Study restores the original fuzzy autocomplete using its pinned category bank. Candidate data does not mark the correct answer. Incorrect feedback contains only the result and never the canonical answer or explanation. Legacy quiz pages still omit autocomplete banks. The original static explorer is separate and is not the classroom application.
 
-| Attempt on a stable question ID | XP |
-| --- | --- |
-| First recorded attempt ever | 2 |
-| First attempt on a later local calendar day | 1 |
-| Further attempts that day | 0 |
+## Updating an existing installation
 
-Dates use `America/Chicago`. Revisions of the same question do not reset the reward rule. A unique reward ledger and account/session locks prevent retries or simultaneous tabs from duplicating points. Opening topics and toggling study markers award no XP. XP begins with Milestone 2; earlier answers are not retroactively rewarded, but are considered when determining first/repeat attempts.
-
-Weekly goals are off by default. A student can choose 10, 20, 30, 50, or 100 different questions per week under **Progress → Weekly goal**. Counts use Monday–Sunday in the site timezone and count distinct question IDs, including answers from unfinished sessions. Repeating the same question does not advance the weekly count. There is no penalty for missing a goal.
-
-Study state, accuracy, XP, goals, and records are private to the student and administrator, survive username changes, and persist across devices. The administrator's student page links to read-only progress. All content remains available without earning points.
-
-### Updating an existing Milestone 1 checkout
+Use [UPDATE_DEPLOYMENT.md](UPDATE_DEPLOYMENT.md) for the existing server or
+[DEPLOYMENT.md](DEPLOYMENT.md) for production configuration and recovery.
+Back up and verify a restore before updating. With the application paused, run:
 
 ```sh
-source .venv/bin/activate
-python manage.py migrate
-python manage.py runserver 127.0.0.1:8000
-```
-
-The additive migration preserves existing accounts, sessions, answers, and imported content. No re-import or new administrator is required. The migration has already been applied to this workspace's local database.
-
-## Personalization and recall (Milestone 3)
-
-**Start practice** now defaults to a personalized mix. Students can select **Typed answers** (the default), multiple choice, or **Recall · self-assessed** and choose personalized, random, or due-only questions on the dashboard, in the library, or on a topic. All existing scope/search/status filters still apply. Personalized sets aim for 4 due questions (oldest first), 3 weak questions, and 3 new questions, filling missing groups from due → weak → new → remaining questions, without duplicates, up to 10. Weak means the current revision's review state has no successful steps. “New to reviews” means no scheduling evidence for that revision and mode, even if older study/history exists. Due-only practice never fills with non-due questions; an empty scope offers a clear message.
-
-Recall hides choices and the answer until **Reveal answer**. Revealing persists across devices but awards nothing and does not count as an answer. After revealing, choose **I remembered** or **I need more practice**, then **Save assessment**. Recall stores a separate boolean assessment; its objective correctness/selected-choice fields stay empty. Explanations and source links stay visible until Continue. Recall does not enter multiple-choice accuracy or personal bests. XP and weekly goals count participation across all three modes, with the same stable-question/day limit, so changing modes earns no extra same-day XP.
-
-### Exact review rules
-
-Schedules belong to the student, exact question revision, and mode. Dates use `America/Chicago` calendar days, including daylight-saving transitions. No worker or scheduled job is needed to make reviews due.
-
-| Evidence | Effect |
-| --- | --- |
-| First answer to a revision in a mode | Success sets step 1; a miss sets step 0; next review tomorrow |
-| Success when due, on a later day | Advance one step; intervals are **1, 3, 7, 14, 30 days**, capped at 30 |
-| Any mistake / self-assessed miss | Reset to step 0; review tomorrow |
-| Same-day successful retry, including after a miss | No new successful step or changed due date |
-| Early success before the due date | No new successful step or changed due date |
-
-A first success plus two successful due reviews on separate days qualifies that **question association** as **remembered across reviews**. This is not broad topic/category mastery. Due status is independent of readiness. A later miss removes remembered status. Every subsequent successful due review at the cap schedules another 30 days. Account locks and unique review-state records serialize concurrent devices; an immediate retry cannot count as lasting recall.
-
-Readiness is computed only from active questions and their current revisions. Recognition never establishes self-assessed recall readiness, or vice versa. Changed content/context gets a fresh revision and fresh schedule. Old sessions retain original question/attribution snapshots; answering an outdated or retired revision preserves the answer and participation reward but does not change current review readiness. Reintroducing the exact same revision may expose its previously saved evidence. Nothing propagates through shared subject IDs.
-
-Saved answers include first/same-day/early/due/historical attempt classifications and the next-review/step snapshot at answer time. Older Milestone 1/2 answers are retained without inventing scheduling evidence; review tracking starts with new answers. Category and subcategory summaries count each current question once within each scope, even when subcategories overlap. The progress page shows separate 30-day objective and self-assessed results with denominators, due reviews, remembered/practicing/new counts, scheduled versus same-day attempts, and the next five reviews for each mode. Study markers, coverage, and XP remain separate.
-
-Only **completed random typed-answer or multiple-choice** sessions enter comparable personal bests, with separate records for each mode. Adaptive and due-only question sets are history/progress records without scored bests because their selection changes with the learner. Existing random-session records keep their comparison keys.
-
-**Save and leave** retains a resumable session. **End this session → End session** explicitly marks it ended early, keeps saved answers/XP/review evidence, and excludes it from bests and resume prompts. There is no automatic expiry. A completed session cannot become abandoned.
-
-### Upgrade and launch preparation
-
-```sh
-source .venv/bin/activate
-python manage.py migrate
-python manage.py check
-python manage.py runserver 127.0.0.1:8000
-```
-
-Migration `0003` is additive and already applied to this workspace's local database. No re-import, replacement administrator, or historical-score rewrite is needed. Do not roll back to Milestone 2 after recall records exist; it cannot interpret them. Read [DEPLOYMENT.md](DEPLOYMENT.md) for production setup, HTTPS/proxy trust, systemd services/timers, backup/restore commands, code versus data rollback, and the owner-led student pilot.
-
-The production dependency file adds Gunicorn 26.2.0. Production requires a strong secret, explicit hosts, debug off, and a database password. A loopback-only Gunicorn listener accepts Caddy's overwritten scheme/client headers; the application rejects other proxy peers and invalid addresses. Daily backup and housekeeping timers are supplied, but are not installed on a server. Local backup/restore commands also work with the normal `.env`; point `PG_BIN_DIR` at the workspace's Postgres.app `bin` directory when using that installation.
-
-## Typed answers
-
-New practice defaults to **Typed answers**. Multiple choice and self-assessed recall keep their existing behavior, and saved sessions retain their original mode. Typed answers use the same personalized/random/due-only selection and library scope filters.
-
-Type at least two characters for up to five suggestions. Arrow keys highlight a suggestion; Tab or Enter completes it without submitting. A second Enter, or **Check answer**, submits the text. Selecting a suggestion is optional. Blank input is a validation error. **Skip** explicitly saves a skipped attempt with no score credit and reveals persistent feedback; Continue remains an explicit action. Plain forms, prompts, and feedback work without JavaScript.
-
-The server grades against the session's pinned revision. Normalized exact answers earn one point. Meaningful partial answers, very close full spellings, and directly entered suppressed wording variants prompt “Not quite, but close — try again!” Prompts preserve the entered text without saving an answer, awarding XP, counting weekly participation, updating reviews, or completing a session. Repeated prompts are allowed. Finalized text is retained in feedback, history, and administrator results. A finalized skip follows the existing participation policy: it counts as an attempted question for XP and weekly goals, subject to the same stable-question/day limits across all modes, and schedules an unsuccessful review.
-
-Each primary category has a content-addressed answer bank containing every eligible current typed question's answer. Older datasets without a dedicated typed bank retain the original correct-answer/distractor fallback. Imports rebuild current bank pointers in the content transaction; unchanged banks reuse their digest. Each typed session item pins an immutable bank alongside its question revision. Old banks remain protected while referenced. Subcategory/topic/search filters restrict questions, not their category suggestion banks. No candidate-review aliases, semantic matching, phonetics, AI calls, or sibling-repository runtime dependencies are used.
-
-The explorer's NFD normalization, search scores, transpositions, numeric safeguards, and conservative wording suppression are ported in `static/typed-matching.js` and `scholars/typed_answers.py`. Wording variants remain searchable but display the question's exact answer; this does not merge source content or mutate the shared bank. The server prepares the question's suggestion view and sends only display/search data. Browser searches make no network requests. Bounded server caches retain at most 24 bank indexes and 32 prepared question views, keyed by immutable content. JavaScript/Python shared fixtures verify normalization, filtering, and grading parity; suggestion ranking stays in the browser.
-
-Typed practice has independent review evidence, readiness, due/weak/new selection, objective accuracy, and random-session bests. The existing multiple-choice coverage table remains explicitly labeled; typed accuracy appears in its separate review summary. Corrected previous misses are mode-specific, and the revisit list retains misses in either objective mode. Typed bests also include category-bank versions in their comparison keys because changed suggestions can affect difficulty. Historical classifications and evidence are not backfilled.
-
-### Upgrade to the dedicated typed-question bank
-
-```sh
-source .venv/bin/activate
+python -m pip install -r requirements-prod.txt
 python manage.py migrate
 python manage.py import_content
 python manage.py check
+python manage.py collectstatic --noinput
 ```
 
-Migration `0006` adds question format, defaulting existing questions to multiple choice. The import preserves those IDs/revisions and adds the new bank. New typed and self-assessed recall sessions use the new questions; multiple choice uses the originals. Existing sessions keep their pinned questions, answers, banks, and results. Old typed/recall review records remain in history but do not enter the new bank's due/readiness counts. The new questions start fresh review evidence. Do not restart older code after importing the new payloads: it assumes every question has distractors. See [the server update guide](UPDATE_DEPLOYMENT.md).
-
-Validation on September 24, 2026: the PostgreSQL backend suite, migration upgrade test, 5 Python content/build tests, and 7 Node tests passed; system, migration, and diff checks were clean. Chrome verified prompts → suggestions → direct Saturn variant prompt → keyboard completion → persistent feedback → Continue/results, separate-device resume/history, 320px layouts, reduced motion, and ordinary forms with JavaScript disabled. The isolated validation database contained typed, skipped, recognition, recall, and abandoned records; a PostgreSQL dump/restore matched all 25 public tables' counts and checksums. No real student records or deployment were changed. Migrations were exercised in isolated databases; run the upgrade above for an existing local application database.
-
-The largest category contains 5,549 answers. `node tests/typed-benchmark.js` measured approximately 9–17 ms per example search, 9.5 ms to index, and 1.1 ms per question preparation on this machine. No worker is needed based on that measurement; slower classroom devices remain a pilot check. Screenshots, browser scripts, and temporary backup artifacts are ignored local validation files.
+Restart the service and verify interests → reading → quiz → review/retry → pass,
+Progress, Explore, and previous results. Migration `0006` adds the typed format;
+`0007` adds Study persistence and topic completions without rewriting old results.
+Do not reverse these migrations or run older code against new Study records.
+Prefer a forward fix; database restore must use the matching application release
+and an explicit decision about any progress recorded since the backup.
+No generation API key or research workspace is needed in production.
 
 ## Repository layout
 
@@ -220,13 +165,7 @@ The preferred server workflow uses a permanent Git checkout and `git pull`. The 
 
 ## Validation
 
-September 25, 2026 question-bank integration: **119 Django tests, 69 Python tests,
-and 9 JavaScript tests passed**. Coverage includes repeat imports of all 26,923
-questions, separate mode selection/readiness, migration defaults, unchanged
-multiple-choice payloads, and scoring/resuming pinned legacy sessions after the
-new bank is imported. System and migration checks pass.
-
-Run the backend tests against PostgreSQL, then the existing checks:
+Run the backend tests against PostgreSQL, then the content and JavaScript checks:
 
 ```sh
 source .venv/bin/activate
@@ -237,18 +176,23 @@ python -m unittest discover -s tests
 node --test tests/*.test.js
 ```
 
-`classroom.test_settings` uses an isolated `test_<POSTGRES_DB>` database and fast password hashing only for tests. Never run the website with test settings. Tests cover authorization, no identity fields, one-administrator database protections, account lifecycle, CSRF, login throttling, the complete student journey, cross-device persistence, smaller question pools, scoring, interrupted sessions, sequential/concurrent retries, repeat imports, rollback, retirement, versioning, and full-dataset preservation.
+`classroom.test_settings` creates an isolated test database and uses fast password
+hashing only for tests. Never run the website with test settings. **147 Django, 69 content, and 9 JavaScript tests passed** on September 25,
+2026. An isolated PostgreSQL restore matched all 33 tables. The final
+redesign validation record is in [phase-four notes](docs/SCHOLARS_BOWL_PHASE4.md).
 
-Milestone 1 validation on September 22, 2026: **45 backend tests + 5 original Python tests + 3 JavaScript tests passed**, with clean system/migration checks. A separate Chrome browser check completed the administrator-to-student journey and reopened the same results after a username change on a new mobile session. Keyboard login/answer submission also passed with JavaScript disabled, reduced motion enabled, and a 320px viewport. Screenshots were inspected; temporary browser-test accounts/database were removed.
+The original static preview remains available with `python scripts/serve.py` on
+port 8766. The redesign prototype uses port 8877; both are separate from the
+functional Django preview on port 8878 in this workspace. Static `dist/` contains
+neither authenticated Study nor saved results and must not replace Django.
 
-Milestone 2 validation on September 22, 2026: **70 backend tests + 5 original Python tests + 3 JavaScript tests passed**. New checks cover study/goal privacy and persistence, no automatic study credit, scope/alias filtering, category overlap, historical classification, comparable bests, content-version changes, day/week boundaries, atomic rollback, concurrent rewards, repeat-import preservation, and a class of 32 logging in behind one network. A Chrome check with JavaScript disabled verified study marking → filtered practice → 0/3 then 3/3 → a personal best without repeat XP → optional weekly goal → the same records on a separate 320px browser session. Keyboard answers, reduced motion, and all table columns at 320px were checked; screenshots were visually reviewed. System/migration checks and `git diff --check` passed.
+## Attribution and operations
 
-Milestone 3 validation on September 22, 2026: **101 backend/operations tests + 5 original Python tests + 3 JavaScript tests passed**, with clean system/migration/diff checks. New coverage includes calendar/DST boundaries, exact intervals, early and same-day retries, separate recall evidence/scoring, reveal persistence, concurrent device answers, rollback, abandoned sessions, active revisions, overlaps, proxy boundaries, and backup guards. Chrome completed recall → reveal → resume on another device → keyboard self-assessment → saved results without a scored best, plus due-only selection and explicit session ending; JavaScript was disabled, reduced motion enabled, and 320px pages/screenshots checked. Gunicorn 26.2.0 + Caddy 2.11.4 served the production profile over local TLS with redirects, secure/HttpOnly cookies, HSTS, static assets, private caching, overwritten forwarding headers, direct-request rejection, and CSRF rejection. `check --deploy` reports only the documented intentional HSTS subdomain/preload warnings. Real PostgreSQL 17 restore drills passed for both the full corpus and an isolated database with recognition/recall/review/abandoned records: all 24 public tables matched snapshot counts and checksums, and the administrator trigger was present. Linux systemd execution, public certificates, off-server copies/alerts, and a student pilot remain unverified until deployment.
+See [ATTRIBUTION.md](ATTRIBUTION.md), **Content attribution** in the footer, and
+reading-card citations. Original source attribution is retained; no blanket
+third-party license is asserted. The redesign plan supersedes older student-flow
+instructions in [WEBSITE_PLAN.md](WEBSITE_PLAN.md).
 
-The original static preview remains available with `python scripts/serve.py` at localhost:8766; `python scripts/build.py` rebuilds ignored `dist/`. This is useful for content comparison and offline browsing; its original quizzes are transient and separate from Django history. Do not publish `dist/` as the authenticated classroom application.
-
-## Attribution and next milestones
-
-See [ATTRIBUTION.md](ATTRIBUTION.md), **Content attribution** in the application footer, and the citations on topic and saved-question pages. Tournament texts retain original source attribution; no blanket third-party license is asserted.
-
-[WEBSITE_PLAN.md](WEBSITE_PLAN.md) records implementation status and deferred work. Off-server backups/alerts, the student pilot, review-based badges, and standardized challenge mode remain operational or later work to confirm with the owner. Production configuration and local HTTPS/restore drills are now included; see [DEPLOYMENT.md](DEPLOYMENT.md). No external analytics, AI generation service, or identity provider was added.
+Production deployment of this redesign, off-server backup/alert checks, and a
+student pilot remain operator tasks. No external analytics, AI runtime service,
+or identity provider is required. See [DEPLOYMENT.md](DEPLOYMENT.md).

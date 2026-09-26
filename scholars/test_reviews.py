@@ -100,13 +100,14 @@ class ReviewTests(TestCase):
         device = Client()
         device.force_login(self.user)
         response = device.get(reverse('scholars:session', args=[session.pk]))
-        self.assertContains(response, 'Save assessment')
-        self.assertContains(response, item.revision.payload['correct_answer'])
+        self.assertContains(response, 'older quiz format')
+        self.assertNotContains(response, item.revision.payload['correct_answer'])
 
     def test_recall_hides_choices_and_answer_until_reveal(self):
         session = self.start('recall')
         response = self.client.get(reverse('scholars:session', args=[session.pk]))
-        self.assertContains(response, 'Reveal answer')
+        self.assertContains(response, 'older quiz format')
+        self.assertNotContains(response, 'Reveal answer')
         self.assertNotContains(response, 'name="selected"')
         self.assertNotContains(response, 'Save assessment')
         self.assertNotContains(response, session.items.get().revision.payload['explanation'])
@@ -263,7 +264,9 @@ class ReviewTests(TestCase):
             self.client.force_login(self.other)
             self.assertEqual(self.client.post(url).status_code, 404)
             self.client.force_login(self.user)
-        self.client.post(urls[0])
+        self.assertEqual(self.client.post(urls[0]).status_code, 400)
+        # Historical services remain usable for retained evidence; HTTP reveals are retired.
+        reveal_question(self.user, session.pk, 1)
         response = self.client.post(reverse('scholars:answer', args=[session.pk, 1]), {
             'self_assessment': 'remembered', 'selected': 0, 'is_correct': True, 'xp': 1000, 'user': self.other.pk})
         self.assertEqual(response.status_code, 302)
@@ -276,7 +279,7 @@ class ReviewTests(TestCase):
     def test_review_progress_is_private_and_admin_read_only(self):
         self.answer(mode='recall')
         self.client.force_login(self.other)
-        response = self.client.get(reverse('scholars:progress'), {'user': self.user.pk})
+        response = self.client.get(reverse('scholars:legacy_progress'), {'user': self.user.pk})
         self.assertEqual(response.context['reviews'][1]['total']['practicing'], 0)
         admin_url = reverse('scholars:student_progress', args=[self.user.pk])
         self.assertEqual(self.client.get(admin_url).status_code, 403)
