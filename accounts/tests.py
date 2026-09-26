@@ -92,6 +92,47 @@ class AccountTests(TestCase):
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.username, "teacher")
 
+    def test_temporary_password_minimum_is_eight_for_creation_and_reset(self):
+        self.client.force_login(self.admin)
+        for route, values, password in [
+            (reverse("students"), {"username": "short-password-student"}, "Orbit7!x"),
+            (reverse("student", args=[self.other.pk]), {}, "Cedar8!y"),
+        ]:
+            with self.subTest(route=route):
+                response = self.client.post(route, {**values, "password": password[:-1]})
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("password", response.context["form"].errors)
+                self.assertEqual(response.context["form"].fields["password"].min_length, 8)
+                response = self.client.post(route, {**values, "password": password})
+                self.assertEqual(response.status_code, 302)
+                username = values.get("username", self.other.username)
+                user = User.objects.get(username=username)
+                self.assertTrue(user.check_password(password))
+                self.assertTrue(user.must_change_password)
+
+    def test_password_change_minimum_is_eight_and_help_text_matches(self):
+        self.client.force_login(self.student)
+        response = self.client.get(reverse("password_change"))
+        self.assertContains(response, "at least 8 characters")
+        self.assertNotContains(response, "at least 12 characters")
+        password = "Birch9!z"
+        response = self.client.post(reverse("password_change"), {
+            "old_password": TEMP_PASSWORD,
+            "new_password1": password[:-1], "new_password2": password[:-1],
+        })
+        self.assertContains(response, "at least 8 characters")
+        self.assertIn("new_password2", response.context["form"].errors)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.check_password(TEMP_PASSWORD))
+        response = self.client.post(reverse("password_change"), {
+            "old_password": TEMP_PASSWORD,
+            "new_password1": password, "new_password2": password,
+        })
+        self.assertRedirects(response, reverse("scholars:dashboard"), fetch_redirect_response=False)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.check_password(password))
+        self.assertFalse(self.student.must_change_password)
+
     def test_admin_creation_ignores_role_injection_and_requires_unique_temporary_password(self):
         self.client.force_login(self.admin)
         response = self.client.post(reverse("students"), {"username": "created-student", "password": NEW_PASSWORD,

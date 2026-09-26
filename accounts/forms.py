@@ -29,7 +29,7 @@ class ChangePasswordForm(PasswordChangeForm):
 
 
 class TemporaryPasswordForm(forms.Form):
-    password = forms.CharField(label="Temporary password", min_length=12, max_length=1024, strip=False,
+    password = forms.CharField(label="Temporary password", min_length=8, max_length=1024, strip=False,
                                widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
                                help_text="Supply a unique temporary password and give it to the student outside this site.")
 
