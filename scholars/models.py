@@ -380,6 +380,8 @@ class LiveQuiz(models.Model):
     started_at = models.DateTimeField(null=True)
     ended_at = models.DateTimeField(null=True)
     ended_early = models.BooleanField(default=False)
+    # Null means an older run without a trustworthy original roster count.
+    roster_size_at_start = models.PositiveIntegerField(null=True, editable=False)
 
     class Meta:
         constraints = [

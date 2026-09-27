@@ -1,13 +1,21 @@
 # Deploy the Scholars Bowl redesign
 
+Phase 5 adds detailed live reports and requires migration `0011_live_roster_count`.
+Back up PostgreSQL, apply pending migrations, collect static assets, and restart.
+Verify private student reports, teacher access to individual reports, student and
+teacher history links, and a partial game that excludes unopened questions.
+New games record the original roster count; older reports explicitly identify
+their unknown baseline. Deleting an account removes its responses and recalculates
+coverage, with a notice when the recorded cohort shrinks. Preserve this column
+during application rollback. See [Phase 5 notes](docs/TEACHER_TOOLS_PHASE5.md).
+
 Phase 4 adds live hosting and requires migration `0010_live_quizzes` plus updated
 static assets. Back up PostgreSQL, migrate, collect static files, and restart using
 the existing deployment steps. No WebSocket proxy, Redis, or worker is required.
 Verify with separate teacher/student sessions: host a saved quiz, join its lobby,
 start together, submit/skip, advance, refresh/rejoin, leave, and finish. Confirm
 late joins are denied and students cannot see future prompts or marked answers.
-The finish page has a basic score/team summary; full reports/history follow in
-Phase 5. Run the Phase 6 load test and a small classroom pilot before relying on
+The finish page links to the detailed reports added in Phase 5. Run the Phase 6 load test and a small classroom pilot before relying on
 30-player production capacity. Preserve live tables during any application rollback;
 reversing migration 0010 deletes saved games and responses. See
 [Phase 4 notes](docs/TEACHER_TOOLS_PHASE4.md) for presence and recovery behavior.

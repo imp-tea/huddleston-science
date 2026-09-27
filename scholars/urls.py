@@ -1,8 +1,12 @@
 from django.urls import path
-from . import views, study_views, discovery_views, teacher_views, quiz_views, live_views
+from . import views, study_views, discovery_views, teacher_views, quiz_views, live_views, live_report_views
 
 app_name = "scholars"
 urlpatterns = [
+    path("live/<uuid:pk>/report/", live_report_views.results, name="live_report"),
+    path("teacher/live/", live_report_views.history, name="live_history"),
+    path("teacher/live/<uuid:pk>/students/<uuid:student_id>/", live_report_views.student_results, name="live_student_report"),
+    path("teacher/quizzes/<uuid:quiz_id>/runs/", live_report_views.history, name="quiz_runs"),
     path("teacher/host/", live_views.host, name="live_host"),
     path("live/status/", live_views.discover, name="live_discover"),
     path("live/<uuid:pk>/", live_views.page, name="live_page"),

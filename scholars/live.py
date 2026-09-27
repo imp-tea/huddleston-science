@@ -143,7 +143,7 @@ def transition(user, game_id, action, version, position, request_key):
         players = game.participants.filter(user_id__in=live_connections(game, now).values('user_id'))
         if not players.exists():
             raise ValidationError('Wait for at least one student to join before starting.')
-        players.update(roster_at=now)
+        game.roster_size_at_start = players.update(roster_at=now)
         game.phase, game.started_at, game.position = 'running', now, 1
         game.questions.filter(position=1).update(opened_at=now)
     elif action == 'cancel' and game.phase == 'waiting':
@@ -159,7 +159,7 @@ def transition(user, game_id, action, version, position, request_key):
     else:
         raise LiveConflict('This action is not available in the current quiz state.')
     game.version += 1
-    game.save(update_fields=['phase', 'started_at', 'position', 'ended_at', 'ended_early', 'version'])
+    game.save(update_fields=['phase', 'started_at', 'position', 'ended_at', 'ended_early', 'version', 'roster_size_at_start'])
     LiveTransition.objects.create(game=game, request_key=key, action=action,
                                   expected_version=version, expected_position=position)
     return game

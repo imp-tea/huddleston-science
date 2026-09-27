@@ -85,6 +85,8 @@ def discover(request):
 def page(request, pk):
     game = get_object_or_404(LiveQuiz, pk=pk)
     live.can_view(request.user, game)
+    if game.phase == 'finished':
+        return redirect('scholars:live_report', pk=game.pk)
     return render(request, 'scholars/live/page.html', {'game': game, 'hosting': game.host_id == request.user.pk,
         'teacher_tools': request.user.is_admin})
 
@@ -127,6 +129,11 @@ def state(request, pk):
             response = question.responses.filter(participant=own).first()
             data['response'] = {'status': response.status, 'answer': response.typed_answer} if response else None
     elif game.phase == 'finished':
+        data['report_url'] = reverse('scholars:live_report', args=[game.pk])
+        if game.roster_size_at_start is None:
+            data['cohort_note'] = 'Original roster size was not recorded for this older quiz. Results use retained player records.'
+        elif game.roster_size_at_start > data['roster_count']:
+            data['cohort_note'] = 'Some player accounts have been deleted. Results have been recalculated from retained records.'
         presented = game.position
         covered = game.questions.filter(position__lte=presented, responses__status='correct').distinct().count()
         data['summary'] = {'presented': presented, 'covered': covered,

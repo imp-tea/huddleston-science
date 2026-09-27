@@ -81,6 +81,10 @@ function render(data) {
     show('live-confirm', false);
     get('live-finished-title').textContent = data.phase === 'cancelled' ? 'Quiz cancelled' : (data.summary.partial ? 'Quiz ended early' : 'Quiz complete!');
     get('live-score').textContent = data.summary ? (hosting ? '' : `Your score: ${data.summary.score}/${data.summary.presented}. `) + (data.summary.partial ? `${data.summary.presented} of ${data.total} questions presented.` : `${data.total} questions played.`) : 'The waiting room was closed before play began.';
+    show('live-report', Boolean(data.report_url));
+    if (data.report_url) get('live-report').href = data.report_url;
+    show('live-cohort-note', Boolean(data.cohort_note));
+    get('live-cohort-note').textContent = data.cohort_note || '';
     get('live-team').textContent = data.summary ? `Team coverage: ${data.summary.covered}/${data.summary.presented} (${data.summary.coverage_percent}%) answered correctly by at least one player.` : '';
   }
 }

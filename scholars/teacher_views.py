@@ -12,6 +12,7 @@ from accounts.models import User
 from accounts.views import administrator_required
 from .models import Question, SavedQuiz, StudyAnswer, Topic
 from .discovery import calendar_progress, coverage_rows
+from .live_reports import student_history as live_history
 from .teacher_progress import practice_history, study_history
 from .question_authoring import StaleQuestion, change_question_status, create_question, edit_question
 from .teacher_forms import QuestionActionForm, QuestionCreateForm, QuestionEditForm
@@ -46,7 +47,7 @@ def student_progress(request, pk):
     student = selected_student(pk)
     return render(request, 'scholars/study/progress.html', {'teacher_tools': True, 'student': student,
         'coverage': coverage_rows(student), 'weekly': calendar_progress(student),
-        'study_sessions': study_history(student)[:5], 'practice_sessions': practice_history(student)[:5]})
+        'live_sessions': live_history(student)[:5], 'study_sessions': study_history(student)[:5], 'practice_sessions': practice_history(student)[:5]})
 
 
 @administrator_required
@@ -54,6 +55,7 @@ def student_progress(request, pk):
 def student_history(request, pk):
     student = selected_student(pk)
     return render(request, 'scholars/teacher/history.html', {'teacher_tools': True, 'student': student,
+        'live_sessions': Paginator(live_history(student), 20).get_page(request.GET.get('live_page')),
         'study_sessions': Paginator(study_history(student), 20).get_page(request.GET.get('study_page')),
         'practice_sessions': Paginator(practice_history(student), 25).get_page(request.GET.get('practice_page'))})
 

@@ -13,6 +13,7 @@ from accounts.views import administrator_required
 from .catalog import describe_scope, topic_pool
 from .forms import AnswerForm, RecallForm, TypedAnswerForm, GoalForm, SCOPE_FIELDS, StartForm
 from .models import Category, PracticeSession, RewardEvent, Source, StudyPreferences, StudyState, Subcategory, Topic, TopicRedirect
+from .live_reports import student_history as live_history
 from .progress import coverage, missed_topics, participation, personal_bests, session_totals
 from .reviews import review_summary
 from .services import abandon_session, answer_question, mark_studied, record_visit, start_session
@@ -156,9 +157,11 @@ def feedback(request, pk, position):
 
 
 @login_required
+@require_GET
 def history(request):
     return render(request, "scholars/history.html", {"sessions": Paginator(
         session_totals(request.user.practice_sessions).order_by("-started_at"), 25).get_page(request.GET.get("page")),
+        "live_sessions": Paginator(live_history(request.user), 20).get_page(request.GET.get("live_page")),
         "study_sessions": Paginator(request.user.study_sessions.order_by("-started_at", "-pk"), 20).get_page(request.GET.get("study_page"))})
 
 
