@@ -18,7 +18,7 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from accounts.models import User
-from .importer import import_content
+from .test_helpers import import_content
 from .models import Category, Question, QuestionRevision, Source, StudyQuestion
 from .question_authoring import (StaleQuestion, change_question_status, create_question,
                                  edit_question)
@@ -36,7 +36,6 @@ class AuthoringTests(TestCase):
     def setUpTestData(cls):
         cls.student = seed_study()
         cls.teacher = admin()
-        Question.objects.update(imported_revision_id=F('current_revision_id'))
         source = Source.objects.create(pk='original', payload={'source': 'Original Tournament', 'round': '3',
             'number': '7', 'question_type': 'bonuses', 'parts': [{'label': 'A',
                 'question': 'Original source secret <script>alert(1)</script>', 'answer': 'Original answer'}]})
@@ -101,16 +100,14 @@ class AuthoringTests(TestCase):
         restored = change_question_status(self.teacher, q.pk, archived.edit_version, 'reactivate')
         self.assertTrue(restored.active)
         self.assertEqual(restored.current_revision_id, q.current_revision_id)
-        with self.assertRaises(ValidationError):
-            change_question_status(self.teacher, 'q-0-0', 0, 'archive')
+        self.assertFalse(change_question_status(self.teacher, 'q-0-0', 0, 'archive').active)
 
-    def test_restore_imported_preserves_edited_revision(self):
+    def test_imported_restore_action_is_removed_history_is_preserved(self):
         baseline = Question.objects.get(pk='q-0-0').current_revision
         edited = edit_question(self.teacher, 'q-0-0', 0, {'question': 'Replacement?', 'correct_answer': 'Zircon'})
-        result = change_question_status(self.teacher, edited.pk, edited.edit_version, 'restore_imported')
-        self.assertEqual(result.current_revision_id, baseline.pk)
-        self.assertIsNone(result.override_revision_id)
-        self.assertTrue(QuestionRevision.objects.filter(pk=edited.current_revision_id).exists())
+        with self.assertRaises(ValidationError):
+            change_question_status(self.teacher, edited.pk, edited.edit_version, 'restore_imported')
+        self.assertTrue(QuestionRevision.objects.filter(pk=baseline.pk).exists())
 
     def test_source_panel_is_admin_only_and_escaped(self):
         url = reverse('scholars:topic', args=['topic-0'])
@@ -186,14 +183,14 @@ class AuthoringTests(TestCase):
         q = self.create()
         change_question_status(self.teacher, q.pk, q.edit_version, 'archive')
         edited = edit_question(self.teacher, 'q-0-0', 0, {'question': 'Edited', 'correct_answer': 'Zircon'})
-        change_question_status(self.teacher, edited.pk, edited.edit_version, 'restore_imported')
+        change_question_status(self.teacher, edited.pk, edited.edit_version, 'archive')
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'teacher.json'
             call_command('export_teacher_questions', str(output), stdout=StringIO())
             data = json.loads(output.read_text())
-            self.assertEqual(len(data['questions']), 2)
+            self.assertEqual(len(data['questions']), Question.objects.count())
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-            self.assertEqual({r['question_id'] for r in data['questions']}, {q.pk, edited.pk})
+            self.assertTrue({q.pk, edited.pk} <= {r['question_id'] for r in data['questions']})
             self.assertNotIn('study-student', output.read_text())
             with self.assertRaises(CommandError):
                 call_command('export_teacher_questions', str(output), stdout=StringIO())
@@ -221,27 +218,20 @@ class AuthoringImportTests(TestCase):
         import_content(self.path)
         q.refresh_from_db()
         created.refresh_from_db()
-        self.assertEqual(q.current_revision_id, q.override_revision_id)
         self.assertEqual(q.current_revision.payload['correct_answer'], 'Teacher answer')
         self.assertEqual(q.current_revision.payload['canonical_correct_answer'], 'Teacher answer')
         self.assertFalse(created.active)
-        self.assertFalse(q.import_changed)
 
-    def test_changed_import_flags_review_preserves_override_and_invalidates_form(self):
+    def test_changed_repo_question_is_ignored_without_invalidating_editor(self):
         q = self.edit()
-        version = q.edit_version
+        version, revision = q.edit_version, q.current_revision_id
         questions = self.data['practice/01.json']
         next(row for row in questions if row['question_id'] == q.pk)['question'] = 'New imported wording?'
         (self.path / 'practice/01.json').write_text(json.dumps(questions))
         import_content(self.path)
         q.refresh_from_db()
-        self.assertTrue(q.import_changed)
-        self.assertEqual(q.imported_revision.payload['question'], 'New imported wording?')
+        self.assertEqual((q.edit_version, q.current_revision_id), (version, revision))
         self.assertEqual(q.current_revision.payload['question'], 'Edited multiple choice?')
-        with self.assertRaises(StaleQuestion):
-            change_question_status(self.teacher, q.pk, version, 'restore_imported')
-        restored = change_question_status(self.teacher, q.pk, q.edit_version, 'restore_imported')
-        self.assertEqual(restored.current_revision.payload['question'], 'New imported wording?')
 
     def test_import_retirement_preserves_authored_question_and_evidence(self):
         q = self.edit()
@@ -257,13 +247,15 @@ class AuthoringImportTests(TestCase):
             (self.path / name).write_text(json.dumps(value))
         with self.assertRaises(ValidationError):
             import_content(self.path)
+        with self.assertRaises(ValidationError):
+            import_content(self.path, allow_retire=True)
+        Question.objects.filter(topic_id=tid).update(active=False)
         import_content(self.path, allow_retire=True)
         q.refresh_from_db()
         created.refresh_from_db()
         self.assertFalse(q.active)
-        self.assertTrue(created.active)  # Local availability is preserved; retired topic excludes it.
+        self.assertFalse(created.active)
         self.assertFalse(created.topic.active)
-        self.assertIsNotNone(q.override_revision_id)
         with self.assertRaises(ValidationError):
             edit_question(self.teacher, created.pk, created.edit_version, {'question': 'Q', 'correct_answer': 'A'})
 
@@ -278,7 +270,6 @@ class AuthoringConcurrencyTests(TransactionTestCase):
     def test_concurrent_edit_accepts_only_one_version(self):
         seed_study()
         teacher = admin()
-        Question.objects.update(imported_revision_id=F('current_revision_id'))
         barrier = Barrier(2)
 
         def run(answer):
@@ -319,6 +310,5 @@ class AuthoringMigrationTests(TransactionTestCase):
             MigrationExecutor(connection).migrate(latest)
         migrated = Question.objects.get(pk='migration-question')
         self.assertEqual(migrated.current_revision_id, revision.pk)
-        self.assertEqual(migrated.imported_revision_id, revision.pk)
-        self.assertIsNone(migrated.override_revision_id)
+        self.assertEqual(migrated.difficulty, "")
         self.assertEqual(migrated.origin, 'imported')

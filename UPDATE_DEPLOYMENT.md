@@ -1,5 +1,19 @@
 # Deploy the Scholars Bowl redesign
 
+## Database question ownership — migration 0012
+
+For this release, follow [the database question-bank cutover](docs/DATABASE_QUESTION_BANK.md#existing-server-cutover)
+while the application is stopped. After `migrate`, run `adopt_question_bank` to
+preview, then `adopt_question_bank --apply` and preview again (zero changes).
+This imports all 26,923 difficulty assessments and applies the exact Pei correction
+without replacing other server questions. Do this before restarting. The normal
+`import_content` command now updates study material only; never use
+`--seed-questions` on an existing installation. Current questions and revision
+history are preserved. Difficulty-based quiz proportions are not changed yet.
+Do not roll application code back across migration 0012 without restoring its
+matching database backup. Earlier phase notes below describe historical releases.
+
+
 Phase 5 adds detailed live reports and requires migration `0011_live_roster_count`.
 Back up PostgreSQL, apply pending migrations, collect static assets, and restart.
 Verify private student reports, teacher access to individual reports, student and

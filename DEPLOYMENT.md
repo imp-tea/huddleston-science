@@ -62,7 +62,9 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-production.txt
 sudo -u huddleston deploy/manage check --deploy
 sudo -u huddleston deploy/manage migrate --noinput
-sudo -u huddleston deploy/manage import_content
+sudo -u huddleston deploy/manage import_content --seed-questions
+sudo -u huddleston deploy/manage adopt_question_bank
+sudo -u huddleston deploy/manage adopt_question_bank --apply
 sudo -u huddleston deploy/manage collectstatic --noinput
 sudo -u huddleston deploy/manage bootstrap_admin classroom-admin
 ```

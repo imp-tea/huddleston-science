@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from accounts.models import User
 from .catalog import topic_pool
-from .importer import import_content
+from .test_helpers import import_content
 from .models import Category, PracticeSession, Question, QuestionRevision, RewardEvent, StudyPreferences, StudyState, Topic
 from .progress import coverage, missed_topics, participation, personal_bests
 from .services import answer_question, mark_studied, reveal_question, start_session

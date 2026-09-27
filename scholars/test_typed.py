@@ -12,7 +12,7 @@ from django.db import close_old_connections, connections, IntegrityError, transa
 from django.test import TestCase, SimpleTestCase, TransactionTestCase
 from django.urls import reverse
 from accounts.models import User
-from .importer import import_content
+from .test_helpers import import_content
 from .models import AnswerBank, Category, PracticeSession, Question, RewardEvent, ReviewState, SessionQuestion, Topic
 from .progress import coverage, participation, personal_bests, missed_topics
 from .reviews import review_summary
@@ -140,7 +140,7 @@ class TypedPracticeTests(TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             SessionQuestion.objects.filter(pk=item.pk).update(skipped=False)
 
-    def test_saturn_direct_variant_and_pinned_answer_after_import(self):
+    def test_saturn_direct_variant_and_pinned_answer_after_edit(self):
         with tempfile.TemporaryDirectory() as directory:
             small_dataset(directory)
             data = copy.deepcopy(self.data)
@@ -148,7 +148,14 @@ class TypedPracticeTests(TestCase):
             q['correct_answer'] = "Saturn's rings"
             q['distractors'] = ['Rings of Saturn', 'The rings of Saturn', 'Moons of Saturn']
             Path(directory, 'practice/01.json').write_text(json.dumps(data['practice/01.json']))
-            import_content(directory)
+            from .question_authoring import edit_question
+            from .test_question_authoring import admin
+            from accounts.models import User
+            teacher = User.objects.filter(username='author-admin').first() or admin()
+            current = Question.objects.get(pk=self.qid)
+            edit_question(teacher, current.pk, current.edit_version, {
+                'question': q['question'], 'correct_answer': q['correct_answer'],
+                'distractors': '\n'.join(q['distractors']), 'explanation': q['explanation']})
             session = self.start()
             item = session.items.select_related('revision', 'answer_bank').get()
             old_bank = item.answer_bank_id
@@ -160,7 +167,14 @@ class TypedPracticeTests(TestCase):
             q['correct_answer'] = 'New answer'
             q['distractors'] = ['New one', 'New two', 'New three']
             Path(directory, 'practice/01.json').write_text(json.dumps(data['practice/01.json']))
-            import_content(directory)
+            from .question_authoring import edit_question
+            from .test_question_authoring import admin
+            from accounts.models import User
+            teacher = User.objects.filter(username='author-admin').first() or admin()
+            current = Question.objects.get(pk=self.qid)
+            edit_question(teacher, current.pk, current.edit_version, {
+                'question': q['question'], 'correct_answer': q['correct_answer'],
+                'distractors': '\n'.join(q['distractors']), 'explanation': q['explanation']})
             self.assertNotEqual(Category.objects.get(pk=self.topic.category_id).typed_bank_id, old_bank)
             item.refresh_from_db()
             self.assertEqual(item.answer_bank_id, old_bank)

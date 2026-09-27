@@ -14,7 +14,7 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from accounts.models import User
-from .importer import import_content
+from .test_helpers import import_content
 from .models import (AnswerBank, Category, Question, QuestionRevision, StudyActivity, StudyAnswer,
                      StudyAttempt, StudyPreferences, StudyQuestion, StudySession, StudySessionTopic,
                      Subcategory, Topic, TopicCompletion)

@@ -110,7 +110,7 @@ def question_create(request, topic_id):
 @administrator_required
 @require_http_methods(['GET', 'POST'])
 def question_edit(request, question_id):
-    question = get_object_or_404(Question.objects.select_related('topic', 'current_revision', 'imported_revision'),
+    question = get_object_or_404(Question.objects.select_related('topic', 'current_revision'),
                                 pk=question_id, active=True, topic__active=True, topic__category__active=True)
     return_quiz = None
     try:
@@ -120,7 +120,7 @@ def question_edit(request, question_id):
     else:
         return_quiz = SavedQuiz.objects.filter(pk=quiz_id, owner=request.user, items__question=question).first()
     initial = dict(question.current_revision.payload)
-    initial.update(version=question.edit_version, distractors='\n'.join(initial.get('distractors', [])))
+    initial.update(difficulty=question.difficulty, version=question.edit_version, distractors='\n'.join(initial.get('distractors', [])))
     form = QuestionEditForm(request.POST if request.method == 'POST' else None,
         initial=initial, question_format=question.format)
     status = 400 if request.method == 'POST' else 200
@@ -143,10 +143,9 @@ def question_edit(request, question_id):
 @administrator_required
 @require_http_methods(['GET', 'POST'])
 def question_action(request, question_id, action):
-    question = get_object_or_404(Question.objects.select_related('topic', 'current_revision', 'imported_revision'),
+    question = get_object_or_404(Question.objects.select_related('topic', 'current_revision'),
                                 pk=question_id, topic__active=True, topic__category__active=True)
-    available = ({'archive': 'Archive Question'} if question.active else {'reactivate': 'Restore Question'}) if question.origin == 'teacher' else (
-        {'restore_imported': 'Restore Imported Version'} if question.active and question.override_revision_id else {})
+    available = {'archive': 'Archive Question'} if question.active else {'reactivate': 'Restore Question'}
     if action not in available:
         from django.http import Http404
         raise Http404

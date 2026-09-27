@@ -2,6 +2,7 @@ from django import forms
 
 
 class QuestionContentForm(forms.Form):
+    difficulty = forms.ChoiceField(required=False, choices=[("", "Not rated"), ("easy", "Easy"), ("medium", "Medium"), ("hard", "Hard")], help_text="Changing the question or answer clears its rating. Save the wording first, then assign a new difficulty.")
     question = forms.CharField(label='Question', max_length=10000, widget=forms.Textarea(attrs={'rows': 5}))
     correct_answer = forms.CharField(label='Correct answer', max_length=240,
         help_text='Use one canonical answer, as it should appear in autocomplete.')
@@ -42,5 +43,4 @@ class QuestionCreateForm(QuestionContentForm):
 
 class QuestionActionForm(forms.Form):
     version = forms.IntegerField(min_value=0, widget=forms.HiddenInput)
-    action = forms.ChoiceField(choices=[('archive', 'Archive'), ('reactivate', 'Restore'),
-                                      ('restore_imported', 'Restore Imported Version')], widget=forms.HiddenInput)
+    action = forms.ChoiceField(choices=[('archive', 'Archive'), ('reactivate', 'Restore')], widget=forms.HiddenInput)

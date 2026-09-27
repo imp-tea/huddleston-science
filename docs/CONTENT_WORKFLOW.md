@@ -23,29 +23,24 @@ sessions keep their old revisions and autocomplete banks. Teacher edits refresh
 the affected category's bank in the same transaction. Conflicting edits from an
 older tab are rejected instead of overwriting a newer change.
 
-Imports update a separate imported baseline. A teacher override stays effective;
-if the baseline changes, the topic panel flags it for review. Open **Edit Question**
-to compare and save your version, or **Restore Imported Version** to use the latest
-baseline again. Original sources and JSON files are never rewritten by the editor.
-Teacher-created questions use reserved `teacher-<uuid>` identities and are excluded
-from import removal checks. They can be archived/restored locally. Retiring an
-imported question or its topic removes it from new selection but preserves history.
+Questions are now database-owned. `import_content` updates study material only;
+it never edits or retires questions. Every question can be archived/restored
+through the site. A topic with active questions cannot be retired by an import.
+New questions retain stable `teacher-<uuid>` identities. Difficulty is editable;
+changing a question or answer clears its previous rating.
 
-After authoring is introduced, JSON plus Git is no longer a full backup of the
-question bank. The existing PostgreSQL backup/verified-restore workflow includes
-all authoring fields and revisions. For a supplementary portable export:
+Use full PostgreSQL backups for recovery. Export the current bank for local
+analysis with `export_question_bank`, optionally adding `--history`. The export
+includes stable IDs, source fingerprints, edit versions, and archived questions;
+it excludes student data and refuses to overwrite an existing file. The old
+`export_teacher_questions` command now exports the entire bank with history.
 
-```sh
-python manage.py export_teacher_questions /existing/private/directory/questions-2026-09-26.json
-```
-
-The command exclusively creates a mode-600 JSON file and refuses to overwrite an
-existing file. It includes authored questions (including archived ones), edited
-imported-question histories, effective/baseline/override pointers, timestamps,
-author IDs, and pinned source context. It excludes student accounts and responses.
-Keep exports outside tracked `data/`; this schema is not accepted by `import_content`.
-Restore the complete database backup for normal recovery. There is no automatic
-merge/import tool for these supplementary exports in Phase 1.
+Return local work as targeted patches through `apply_question_updates`. Preview
+first, then use `--apply`; every patch must include the exported version and
+fingerprint. Any stale row rejects the entire transaction. See the
+[cutover and bulk-update guide](DATABASE_QUESTION_BANK.md) for commands and the
+patch format. Keep snapshots in ignored `research/`; they do not replace the
+server's authority or full database backups.
 
 ## Saved quizzes
 

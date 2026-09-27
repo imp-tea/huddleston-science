@@ -9,6 +9,7 @@ from .importer import CONTENT_LOCK, digest
 from .models import Question, QuestionRevision, Source, Topic
 from .services import lock_active_account
 from .typed_answers import rebuild_banks
+from .question_bank import state, record_change, fingerprint
 
 
 class StaleQuestion(ValidationError):
@@ -40,7 +41,7 @@ def snapshot(topic):
 def checked_question(question_id, version):
     question = Question.objects.select_for_update(of=('self',)).select_related('current_revision').get(pk=question_id)
     if type(version) is not int or question.edit_version != version:
-        raise StaleQuestion("This question changed in another tab or content import. Reload to review the latest version before saving.")
+        raise StaleQuestion("This question changed in another tab or bulk update. Reload to review the latest version before saving.")
     return question
 
 
@@ -62,16 +63,21 @@ def validated_payload(question, data):
     return payload
 
 
-def save_revision(question, payload, topic, author):
+def save_revision(question, payload, topic, author, difficulty=None):
+    before = state(question)
+    changed_fact = bool(question.current_revision_id and fingerprint(question) != fingerprint(question, payload))
+    if changed_fact:
+        question.difficulty, question.difficulty_metadata = "", {}
+    elif difficulty is not None and difficulty != question.difficulty:
+        question.difficulty = difficulty
+        question.difficulty_metadata = {"kind": "manual", "source_sha256": fingerprint(question, payload)} if difficulty else {}
     context = snapshot(topic)
     revision, _ = QuestionRevision.objects.get_or_create(question=question, digest=digest([payload, context]),
         defaults={'payload': payload, 'context': context, 'author': author})
     question.current_revision = revision
-    if question.origin == Question.Origin.IMPORTED:
-        question.override_revision = revision
-        question.override_base_revision_id = question.imported_revision_id
     question.edit_version += 1
     question.save()
+    record_change(question, before, author)
     rebuild_banks([topic.category_id])
     return question
 
@@ -92,7 +98,7 @@ def create_question(user, topic_id, request_key, data):
     question = Question(id=question_id, topic=topic, format='typed', origin=Question.Origin.TEACHER)
     payload = validated_payload(question, data)
     question.save(force_insert=True)
-    return save_revision(question, payload, topic, author)
+    return save_revision(question, payload, topic, author, data.get("difficulty", ""))
 
 
 @transaction.atomic
@@ -102,26 +108,21 @@ def edit_question(user, question_id, version, data):
     topic = editable_topic(question.topic_id)
     if not question.active:
         raise ValidationError("Restore this archived question before editing it.")
-    return save_revision(question, validated_payload(question, data), topic, author)
+    return save_revision(question, validated_payload(question, data), topic, author, data.get("difficulty"))
 
 
 @transaction.atomic
 def change_question_status(user, question_id, version, action):
-    lock_author(user)
+    author = lock_author(user)
     question = checked_question(question_id, version)
     topic = editable_topic(question.topic_id)
-    if action == 'restore_imported' and question.origin == Question.Origin.IMPORTED:
-        if not question.imported_revision_id or not question.active:
-            raise ValidationError("No active imported version is available to restore.")
-        question.override_revision = None
-        question.override_base_revision = None
-        question.current_revision_id = question.imported_revision_id
-    elif action in {'archive', 'reactivate'} and question.origin == Question.Origin.TEACHER:
-        question.active = action == 'reactivate'
-    else:
+    before = state(question)
+    if action not in {'archive', 'reactivate'}:
         raise ValidationError("This action is not available for this question.")
+    question.active = action == 'reactivate'
     question.edit_version += 1
     question.save()
+    record_change(question, before, author, action)
     rebuild_banks([topic.category_id])
     return question
 
@@ -135,5 +136,5 @@ def topic_tools(user, topic_id):
         return {}
     return {'teacher_topic': topic,
             'teacher_questions': Question.objects.filter(topic=topic).select_related(
-                'current_revision', 'current_revision__author', 'imported_revision').order_by('-format', 'id'),
+                'current_revision', 'current_revision__author').order_by('-format', 'id'),
             'teacher_sources': Source.objects.filter(pk__in=topic.payload.get('source_ids', [])).order_by('pk')}

@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from accounts.models import User
-from .importer import import_content
+from .test_helpers import import_content
 from .models import Question, QuestionRevision, ReviewState
 from .reviews import current_reviews, review_summary
 from .services import start_session, answer_question, reveal_question
@@ -26,6 +26,13 @@ class SeparateQuestionBankTests(TestCase):
         self.client.force_login(self.user)
 
     def install(self):
+        # Fixture for the transition from legacy sessions to a newly authored typed bank.
+        from .question_authoring import create_question
+        from .test_question_authoring import admin
+        teacher = admin()
+        for q in self.typed:
+            create_question(teacher, q['study_topic_id'], uuid.uuid4(),
+                            {'question': q['question'], 'correct_answer': q['answer']})
         (self.path/'typed-questions.json').write_text(json.dumps(self.typed))
         return import_content(self.path)
 
@@ -84,10 +91,10 @@ class SeparateQuestionBankTests(TestCase):
 
     def test_omitted_bank_is_not_silently_retired(self):
         self.install(); (self.path/'typed-questions.json').unlink()
-        with self.assertRaises(ValidationError):import_content(self.path)
+        import_content(self.path)
         self.assertEqual(Question.objects.filter(format='typed',active=True).count(),len(self.typed))
         import_content(self.path,allow_retire=True)
-        self.assertFalse(Question.objects.filter(format='typed',active=True).exists())
+        self.assertEqual(Question.objects.filter(format='typed',active=True).count(),len(self.typed))
         self.assertTrue(start_session(self.user,uuid.uuid4(),{},'typed').items.exists())
 
     def test_bad_typed_payload_fails_before_writes(self):
@@ -96,5 +103,9 @@ class SeparateQuestionBankTests(TestCase):
                        lambda rows: rows[0].update(question_id=rows[1]['question_id'])):
             rows = json.loads(json.dumps(self.typed)); mutate(rows)
             (self.path/'typed-questions.json').write_text(json.dumps(rows))
-            with self.assertRaises(ValueError):import_content(self.path)
+            from scripts.typed_content import load_typed_questions
+            from scripts.build import load_and_validate
+            with self.assertRaises(ValueError):
+                data = load_and_validate(self.path)
+                load_typed_questions(self.path, data[1], data[4])
             self.assertEqual(Question.objects.count(),count)

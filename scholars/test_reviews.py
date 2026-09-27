@@ -11,7 +11,7 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 from accounts.models import User
-from .importer import import_content
+from .test_helpers import import_content
 from .models import PracticeSession, Question, QuestionRevision, ReviewState, RewardEvent, SessionQuestion, Topic
 from .progress import coverage, personal_bests
 from .reviews import current_reviews, review_summary, select_questions

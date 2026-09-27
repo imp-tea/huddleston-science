@@ -1,5 +1,12 @@
 # Huddleston Science
 
+Questions are now database-owned. Migration `0012` and the one-time checked
+`adopt_question_bank` command prepare difficulty labels and the Pei correction.
+See [cutover, bootstrap, local export, and bulk updates](docs/DATABASE_QUESTION_BANK.md).
+Normal content imports never overwrite questions. Initial empty-bank setup uses
+`import_content --seed-questions`; existing installations must not use that flag.
+
+
 The approved Scholars Bowl redesign is tracked in
 [the redesign plan](docs/SCHOLARS_BOWL_REDESIGN.md). **The redesign is implemented in Django:** saved category interests, a ten-subject picker, reading sessions, typed
 quizzes, targeted review/retries, and timestamped topic completions. Home, Account,
@@ -10,7 +17,7 @@ See [phase-two rollout notes](docs/SCHOLARS_BOWL_PHASE2.md) and
 [phase-three implementation notes](docs/SCHOLARS_BOWL_PHASE3.md).
 
 Run migrations and import the current typed-question data before using Study:
-`python manage.py migrate` then `python manage.py import_content`. Existing
+`python manage.py migrate` then `python manage.py import_content --seed-questions` for an empty database. Existing
 accounts and practice results are retained; old results and manual study markers
 are not converted into new topic completions. Final validation and polish are recorded in the phase-four notes below.
 
@@ -42,7 +49,9 @@ p.chmod(0o600)
 PY
 docker compose up -d --wait db
 python manage.py migrate
-python manage.py import_content
+python manage.py import_content --seed-questions
+python manage.py adopt_question_bank
+python manage.py adopt_question_bank --apply
 python manage.py bootstrap_admin classroom-admin
 python manage.py runserver 127.0.0.1:8000
 ```
@@ -91,18 +100,14 @@ The administrator can reset credentials, disable/re-enable accounts, and delete 
 
 ## Educational content and repeatable imports
 
-`data/` remains authoritative for imported content. Administrator question edits
-and new questions are stored in PostgreSQL and survive imports. On an Explore
-topic page, expand **Quiz Questions** to create a typed question or use its **⋯**
-menu to edit a question. **Source Questions** shows the original read-only
-tournament material. These panels are available only to the administrator,
-including on topic-reading pages.
-
-Teacher edits apply to future sessions; existing sessions keep their pinned
-questions and autocomplete banks. Imported questions retain a separate baseline:
-an import never overwrites the teacher version, and a changed baseline is flagged
-for comparison. **Restore Imported Version** switches future sessions back to it.
-Teacher-created questions can be archived/restored without deleting history.
+`data/` supplies study material and initial question seeds. PostgreSQL owns the
+current question bank. On an Explore topic page, expand **Quiz Questions** to
+create a typed question or use its **⋯** menu to edit, archive, or restore any
+question. Difficulty labels appear in this administrator-only panel and can be
+edited. Changing wording or the answer clears an existing rating; save the
+wording first, then reassess difficulty. **Source Questions** shows original
+read-only tournament material. Existing sessions keep their pinned questions
+and autocomplete banks. See [database ownership and local bulk work](docs/DATABASE_QUESTION_BANK.md).
 The administrator's Scholars Bowl home now includes **Teacher Tools**, also in
 the Scholars Bowl navigation. **View Student Progress** searches all student
 accounts (including disabled accounts) and shows the selected student's current
@@ -140,15 +145,15 @@ records. `python manage.py export_saved_quizzes /path/to/new-quizzes.json` expor
 lists plus reviewed/current question evidence without student data; full database
 backups remain the recovery mechanism. See [Phase 3 notes](docs/TEACHER_TOOLS_PHASE3.md).
 
-Migration `0008` adds authoring provenance and seeds the imported baseline from
-each existing question's current revision. Apply it before running the updated
-application or importer. Full database backups now protect teacher-authored
+Historical migration `0008` added authoring provenance and seeded the imported baseline from
+each existing question's current revision. Migration `0012` replaces those baseline
+pointers with database ownership and retains the former relationships in audit history. Full database backups now protect teacher-authored
 content as well as student records. A portable export is available with
 `python manage.py export_teacher_questions /path/to/new-export.json`; it contains
 question revisions/provenance and no student records. It is supplementary to the
 database backup, not an input to `import_content`.
 
-For imported content, edit its JSON files, then run:
+For study material and taxonomy, edit the JSON files, then run:
 
 ```sh
 python manage.py import_content
@@ -162,7 +167,7 @@ The current question inventory is **26,923**: the original **10,976 multiple-cho
 
 All 7,072 topics now have expanded study content: 2,335 existing detailed pages and 4,737 paragraph-only descriptions generated by GPT-6 Sol with low reasoning and no internet tools. The new paragraphs retain generation provenance rather than invented citations; the full set has passed structural validation but has not received a factual audit. Accepted content lives in `data/content.json`. [Content maintenance](docs/CONTENT_WORKFLOW.md) documents both workflows. Raw responses and import records remain local under ignored `research/`.
 
-Repeated imports update current content without duplicating questions or deleting progress. Study sessions pin reading content, question revisions, and grading banks at creation. Imports and retirements do not change an unfinished session's reading or retry pool. Historical session evidence stays intact; Progress and Explore use current active topic membership. Topic completion is unique per student and stable topic ID, including topics in multiple subcategories. Separate records with the same subject ID are not merged.
+Repeated imports update study material without changing database-owned questions or deleting progress. Study sessions pin reading content, question revisions, and grading banks at creation. Imports and retirements do not change an unfinished session's reading or retry pool. Historical session evidence stays intact; Progress and Explore use current active topic membership. Topic completion is unique per student and stable topic ID, including topics in multiple subcategories. Separate records with the same subject ID are not merged.
 
 Imports refuse missing existing IDs unless explicitly reviewed and approved through:
 
@@ -170,7 +175,7 @@ Imports refuse missing existing IDs unless explicitly reviewed and approved thro
 python manage.py import_content --allow-retire
 ```
 
-This retires removed content from new practice; it does not delete it or student history. Reintroducing the same identity reactivates it. Reassigning a topic ID to a different subject or a question ID to a different topic is rejected. For an alternate complete dataset, use `--data-dir /path/to/data`. Never point this at generated `dist/`.
+This retires removed study material without deleting history. Topics with active questions cannot be retired until those questions are explicitly archived. Question identities, wording, and availability are maintained in the database. Reassigning a topic ID to a different subject is rejected. For an alternate complete dataset, use `--data-dir /path/to/data`. Never point this at generated `dist/`.
 
 ## Study rules and retained history
 
@@ -188,10 +193,11 @@ Older practice sessions, manual studied markers, XP, optional question goals, pe
 
 Use [UPDATE_DEPLOYMENT.md](UPDATE_DEPLOYMENT.md) for the existing server or
 [DEPLOYMENT.md](DEPLOYMENT.md) for production configuration and recovery.
-Back up and verify a restore before updating. With the application paused, run:
+For migration 0012, perform the one-time checked cutover in [the question-bank guide](docs/DATABASE_QUESTION_BANK.md#existing-server-cutover) before restarting.
+Back up and verify a restore before updating. Routine updates after that cutover use:
 
 ```sh
-python -m pip install -r requirements-prod.txt
+python -m pip install -r requirements-production.txt
 python manage.py migrate
 python manage.py import_content
 python manage.py check

@@ -59,14 +59,28 @@ class Question(models.Model):
     current_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
     active = models.BooleanField(default=True)
     origin = models.CharField(max_length=10, choices=Origin.choices, default=Origin.IMPORTED)
-    imported_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
-    override_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
-    override_base_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
+    class Difficulty(models.TextChoices):
+        UNRATED = "", "Not rated"
+        EASY = "easy", "Easy"
+        MEDIUM = "medium", "Medium"
+        HARD = "hard", "Hard"
+
+    difficulty = models.CharField(max_length=6, choices=Difficulty.choices, default="", blank=True, db_index=True)
+    difficulty_metadata = models.JSONField(default=dict)
     edit_version = models.PositiveIntegerField(default=0)
 
-    @property
-    def import_changed(self):
-        return bool(self.override_revision_id and self.override_base_revision_id != self.imported_revision_id)
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(difficulty__in=['', 'easy', 'medium', 'hard']),
+                                              name='question_valid_difficulty')]
+
+
+class QuestionChange(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.PROTECT, related_name='changes')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    kind = models.CharField(max_length=30)
+    before = models.JSONField()
+    after = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class QuestionRevision(models.Model):

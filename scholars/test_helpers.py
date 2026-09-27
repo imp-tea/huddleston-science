@@ -23,3 +23,10 @@ def small_dataset(path):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(json.dumps(value))
     return values
+
+
+def import_content(data_dir=None, allow_retire=False):
+    """Test fixture bootstrap; subsequent imports use production study-only semantics."""
+    from .importer import import_content as load_content
+    from .models import Question
+    return load_content(data_dir, allow_retire, seed_questions=not Question.objects.exists())

@@ -19,14 +19,14 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def load_and_validate(data_dir=None):
+def load_and_validate(data_dir=None, *, include_questions=True):
     data_dir = Path(data_dir) if data_dir is not None else DATA
     taxonomy = read(data_dir / 'taxonomy.json')
     topics = read(data_dir / 'topics.json')
     content = read(data_dir / 'content.json')
     sources = read(data_dir / 'sources.json')
     redirects = read(data_dir / 'topic-redirects.json')
-    practice = [q for path in sorted((data_dir / 'practice').glob('*.json')) for q in read(path)]
+    practice = [q for path in sorted((data_dir / 'practice').glob('*.json')) for q in read(path)] if include_questions else []
     categories = {c['primary_category'] for c in taxonomy['categories']}
     subs = {s['subcategory_id']: s for s in taxonomy['subcategories']}
     topic_map = {t['study_topic_id']: t for t in topics}
@@ -76,6 +76,8 @@ def load_and_validate(data_dir=None):
             if 'source_urls' in block:
                 require(bool(block['source_urls']) and set(block['source_urls']) <= urls, f'Unknown block citation: {tid}')
     require(all(target in topic_map and old not in topic_map for old, target in redirects.items()), 'Invalid redirect')
+    if not include_questions:
+        return taxonomy, topics, content, sources, practice, redirects
     require(len({q['question_id'] for q in practice}) == len(practice), 'Duplicate practice question')
     counts = Counter(); topic_answers = set()
     for q in practice:

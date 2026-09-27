@@ -11,7 +11,7 @@ from django.db import close_old_connections, connections
 from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 from accounts.models import User
-from .importer import import_content
+from .test_helpers import import_content
 from .models import Category, ContentImport, PracticeSession, Question, QuestionRevision, Source, Subcategory, Topic, TopicRedirect
 from .services import answer_question, start_session
 from .test_helpers import small_dataset
@@ -213,7 +213,7 @@ class ImportTests(TestCase):
         self.assertEqual(QuestionRevision.objects.count(), Question.objects.count())
         self.assertEqual(session.answered, 1)
 
-    def test_content_edit_creates_revision_without_changing_inflight_or_saved_results(self):
+    def test_repo_question_edit_does_not_change_current_or_saved_results(self):
         q = Question.objects.first()
         session = recognition_session(self.user, uuid.uuid4(), {"topic": q.topic_id})
         old = session.items.select_related("revision").first()
@@ -225,13 +225,13 @@ class ImportTests(TestCase):
         self.write("practice/01.json", questions)
         import_content(self.path)
         current = Question.objects.get(pk=target["question_id"])
-        self.assertNotEqual(current.current_revision_id, old.revision_id)
+        self.assertEqual(current.current_revision_id, old.revision_id)
         old.refresh_from_db()
         self.assertNotEqual(old.revision.payload["explanation"], "Revised explanation.")
         self.assertTrue(old.is_correct)
         self.assertEqual(session.score, 1)
 
-    def test_source_attribution_changes_are_versioned(self):
+    def test_source_updates_preserve_question_revision_attribution(self):
         question = Question.objects.first()
         revision = question.current_revision
         sid = next(iter(revision.context["sources"]))
@@ -239,7 +239,7 @@ class ImportTests(TestCase):
         self.write("sources.json", self.data["sources.json"])
         import_content(self.path)
         question.refresh_from_db()
-        self.assertNotEqual(question.current_revision_id, revision.pk)
+        self.assertEqual(question.current_revision_id, revision.pk)
         self.assertNotEqual(revision.context["sources"][sid]["source"], "Updated source attribution")
 
     def test_enriched_notes_preserve_inflight_revision_and_render_unlicensed_citation(self):
@@ -257,9 +257,9 @@ class ImportTests(TestCase):
         import_content(self.path)
         question.refresh_from_db()
         item.refresh_from_db()
-        self.assertNotEqual(question.current_revision_id, item.revision_id)
+        self.assertEqual(question.current_revision_id, item.revision_id)
         self.assertEqual(item.revision.context, original_context)
-        self.assertEqual(question.current_revision.context["study_content"], study)
+        self.assertEqual(question.topic.study_content, study)
         self.client.force_login(self.user)
         response = self.client.get(reverse("scholars:topic", args=[question.topic_id]))
         self.assertContains(response, "An original researched overview.")
@@ -270,8 +270,8 @@ class ImportTests(TestCase):
         self.assertEqual(Question.objects.get(pk=question.pk).current_revision_id, question.current_revision_id)
 
     def test_invalid_import_does_not_modify_database(self):
-        self.data["practice/01.json"][0]["evidence_ids"] = ["missing-evidence"]
-        self.write("practice/01.json", self.data["practice/01.json"])
+        self.data["topics.json"][0]["primary_category"] = "missing-category"
+        self.write("topics.json", self.data["topics.json"])
         with self.assertRaises(ValueError):
             import_content(self.path)
         self.assertEqual(ContentImport.objects.count(), 1)
@@ -281,7 +281,7 @@ class ImportTests(TestCase):
         old = Category.objects.first().payload
         self.data["taxonomy.json"]["categories"][0]["test_metadata"] = "This change must roll back."
         self.write("taxonomy.json", self.data["taxonomy.json"])
-        with patch("scholars.importer.QuestionRevision.objects.bulk_create", side_effect=RuntimeError("simulated failure")):
+        with patch("scholars.importer.Source.objects.bulk_create", side_effect=RuntimeError("simulated failure")):
             with self.assertRaises(RuntimeError):
                 import_content(self.path)
         self.assertEqual(Category.objects.first().payload, old)
@@ -311,6 +311,9 @@ class ImportTests(TestCase):
         with self.assertRaises(ValidationError):
             import_content(self.path)
         self.assertTrue(Topic.objects.get(pk=topic.pk).active)
+        with self.assertRaises(ValidationError):
+            import_content(self.path, allow_retire=True)
+        Question.objects.filter(topic=topic).update(active=False)
         import_content(self.path, allow_retire=True)
         self.assertFalse(Topic.objects.get(pk=topic.pk).active)
         self.assertFalse(Question.objects.filter(topic=topic, active=True).exists())
@@ -329,7 +332,8 @@ class ImportTests(TestCase):
         questions[1]["question_id"] = questions[0]["question_id"]
         self.write("practice/01.json", questions)
         with self.assertRaises(ValueError):
-            import_content(self.path)
+            from .importer import import_content as seed
+            seed(self.path, seed_questions=True)
         self.assertEqual(ContentImport.objects.count(), 1)
 
 
@@ -363,6 +367,16 @@ class FullContentTests(TestCase):
         self.assertEqual({q.pk: (q.current_revision.payload['question'], q.current_revision.payload['correct_answer'])
                           for q in Question.objects.filter(format='typed').select_related('current_revision')},
                          {q['question_id']: (q['question'], q['answer']) for q in approved})
+
+        from .question_bank import adopt_difficulty
+        classifications = json.loads((root / 'question-difficulty.json').read_text())
+        preview = adopt_difficulty(classifications)
+        self.assertEqual((preview['assessed'], preview['changes']), (26923, 26923))
+        self.assertFalse(Question.objects.exclude(difficulty='').exists())
+        adopt_difficulty(classifications, apply=True)
+        self.assertEqual(Question.objects.exclude(difficulty='').count(), 26923)
+        self.assertEqual(adopt_difficulty(classifications, apply=True)['changes'], 0)
+        self.assertEqual(QuestionRevision.objects.count(), 26923)
 
 
 class ConcurrentPracticeTests(TransactionTestCase):
