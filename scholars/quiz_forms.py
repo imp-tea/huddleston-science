@@ -34,8 +34,8 @@ class QuizActionForm(forms.Form):
 class RandomQuizForm(forms.Form):
     name = forms.CharField(max_length=160, label='Quiz name')
     categories = forms.MultipleChoiceField(widget=forms.CheckboxSelectMultiple)
-    subcategories = forms.MultipleChoiceField(required=False, widget=forms.SelectMultiple(attrs={'size': 8}),
-        help_text='Optional: select specific subcategories. If selected, only questions in those subcategories are used. Leave empty to use all selected categories.')
+    subcategories = forms.MultipleChoiceField(required=False, widget=forms.CheckboxSelectMultiple,
+        help_text='Optional: check any subcategories to include. Uncheck all to use all selected categories.')
     count = forms.IntegerField(min_value=1, max_value=100, initial=20, label='Number of questions')
     max_per_topic = forms.IntegerField(min_value=1, max_value=100, required=False,
                                        label='Maximum questions per topic', help_text='Leave empty for no topic limit.')
