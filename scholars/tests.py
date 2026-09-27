@@ -168,7 +168,7 @@ class PracticeTests(TestCase):
         self.assertEqual(session.answered, session.total)
 
     def test_library_topics_attribution_and_redirects_render(self):
-        self.assertRedirects(self.client.get(reverse("scholars:dashboard")), reverse("scholars:interests"))
+        self.assertContains(self.client.get(reverse("scholars:dashboard")), "Choose your interests")
         for route in ["home", "scholars:legacy_practice", "scholars:library", "scholars:history", "scholars:attribution"]:
             self.assertEqual(self.client.get(reverse(route)).status_code, 200)
         topic = Topic.objects.exclude(study_content={}).first()

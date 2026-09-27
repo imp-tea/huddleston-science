@@ -116,8 +116,16 @@ ordering. Edited bank questions are flagged for explicit review; unavailable ite
 remain visible until removed or restored. Random generation supports categories,
 optional subcategories, 1–100 questions, a per-topic limit, balanced or whole-pool
 sampling, and duplicate exclusion. Preview first, then explicitly save the exact
-selection. **Host a Quiz** remains upcoming in
-[the implementation plan](docs/TEACHER_TOOLS_AND_LIVE_QUIZZES.md).
+selection. **Host a Quiz** opens a teacher-paced live game with a waiting room, automatic
+student invitation, roster locking, refresh/reconnect recovery, and manual question
+advancement. Live games use the same autocomplete and grading as Study. Responses
+persist across disconnects; basic individual/team summaries appear on finish.
+Detailed reports/history follow in Phase 5. See [Phase 4 notes](docs/TEACHER_TOOLS_PHASE4.md).
+
+Migration `0010` adds durable live game, participant, presence, question snapshot,
+response, and transition records. Apply it and collect updated static files before
+restarting. No additional service or dependency is needed. Include live tables in
+full database backups; classroom capacity testing remains Phase 6.
 
 Migration `0009` adds saved quizzes and ordered items. Apply it before restarting
 the updated application. Lists live in PostgreSQL, alongside authoring and student

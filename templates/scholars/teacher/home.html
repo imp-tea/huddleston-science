@@ -1,10 +1,10 @@
-{% extends 'study_base.html' %}{% block title %}Teacher Tools · Scholars Bowl{% endblock %}{% block content %}
+{% extends 'study_base.html' %}{% load static %}{% block title %}Teacher Tools · Scholars Bowl<div data-live-discovery="{% url 'scholars:live_discover' %}" data-host-url="{% url 'scholars:live_host' %}"></div><script type="module" src="{% static 'live-discovery.js' %}"></script>{% endblock %}{% block content %}
 <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'scholars:dashboard' %}">Scholars Bowl</a><span aria-hidden="true">/</span><span aria-current="page">Teacher Tools</span></nav>
 <div class="page-heading"><p class="eyebrow">Your classroom</p><h1>Teacher Tools</h1><p>Follow your students’ learning and prepare for practice together.</p></div>
 <div class="teacher-hub">
 <a class="destination destination-progress" href="{% url 'scholars:teacher_students' %}">{% include 'scholars/study/icon.html' with icon='progress' %}<h2>View Student Progress</h2><p>Browse progress, recent activity, and saved quiz attempts.</p><span class="circle-arrow" aria-hidden="true">↗</span></a>
 <a class="destination" href="{% url 'scholars:quiz_list' %}">{% include 'scholars/study/icon.html' with icon='book' %}<h2>Quiz Creator</h2><p>Save question lists and build quizzes from your library.</p></a>
-<section class="destination teacher-upcoming"><span class="eyebrow">Coming later</span>{% include 'scholars/study/icon.html' with icon='spark' %}<h2>Host a Quiz</h2><p>Bring the class together for a teacher-led live quiz.</p></section>
+<a class="destination" data-host-card href="{% if live_invitation %}{{ live_invitation.url }}{% else %}{% url 'scholars:live_host' %}{% endif %}">{% include 'scholars/study/icon.html' with icon='spark' %}<h2 data-host-label>{% if live_invitation %}Hosting Live Quiz{% else %}Host a Quiz{% endif %}</h2><p>Bring the class together for a teacher-led live quiz.</p></a>
 </div>
 <p class="teacher-library-note">To view source questions or create and edit quiz questions, open a topic in <a href="{% url 'scholars:library' %}">Explore</a>.</p>
-{% endblock %}
+<div data-live-discovery="{% url 'scholars:live_discover' %}" data-host-url="{% url 'scholars:live_host' %}"></div><script type="module" src="{% static 'live-discovery.js' %}"></script>{% endblock %}

@@ -3,7 +3,7 @@
 <div class="page-heading"><h1>{{ quiz.name }}</h1><p>{{ items|length }} of 100 questions{% if quiz.archived %} · Archived{% endif %}</p><p>Questions follow the shared bank. Changes are flagged for review; saved results keep their original wording.</p></div>
 {% if error %}<div class="notice" role="alert">{% for message in error %}<p>{{ message }}</p>{% endfor %}<a href="{% url 'scholars:quiz_detail' quiz.pk %}">Reload this quiz</a></div>{% endif %}
 {% if needs_review %}<p class="notice">Review changed questions and remove or replace unavailable questions before hosting.</p>{% endif %}
-<div class="quiz-toolbar">
+<div class="quiz-toolbar">{% if not quiz.archived %}<a class="primary-button" href="{% url 'scholars:live_host' %}">Host a Quiz</a>{% endif %}
 {% if not quiz.archived %}<a class="secondary-button" href="{% url 'scholars:library' %}">Add questions from Explore</a>{% else %}<form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ quiz.edit_version }}"><button class="secondary-button" name="action" value="restore">Restore Quiz</button></form>{% endif %}
 </div>
 <div class="quiz-settings">

@@ -1,5 +1,17 @@
 # Deploy the Scholars Bowl redesign
 
+Phase 4 adds live hosting and requires migration `0010_live_quizzes` plus updated
+static assets. Back up PostgreSQL, migrate, collect static files, and restart using
+the existing deployment steps. No WebSocket proxy, Redis, or worker is required.
+Verify with separate teacher/student sessions: host a saved quiz, join its lobby,
+start together, submit/skip, advance, refresh/rejoin, leave, and finish. Confirm
+late joins are denied and students cannot see future prompts or marked answers.
+The finish page has a basic score/team summary; full reports/history follow in
+Phase 5. Run the Phase 6 load test and a small classroom pilot before relying on
+30-player production capacity. Preserve live tables during any application rollback;
+reversing migration 0010 deletes saved games and responses. See
+[Phase 4 notes](docs/TEACHER_TOOLS_PHASE4.md) for presence and recovery behavior.
+
 Phase 3 adds Quiz Creator and requires migration `0009_saved_quizzes`. Back up the
 full PostgreSQL database, apply migrations, collect static files, then restart the
 application using the deployment steps below. No packages or services were added.
@@ -10,7 +22,7 @@ in PostgreSQL and cannot be recreated from the repository's content JSON. A
 supplementary export is available with `python manage.py export_saved_quizzes
 /path/to/new-quizzes.json`; restore a full database backup for recovery. Keep
 migration 0009 applied when rolling application code back; reversing it drops quiz
-lists. Host a Quiz remains upcoming.
+lists. Live hosting is available after Phase 4 migration 0010.
 
 Phase 2 adds Teacher Tools and read-only student reports with no additional
 migration or dependencies. After updating, verify the administrator's new Scholars

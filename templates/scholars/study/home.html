@@ -1,5 +1,8 @@
-{% extends 'study_base.html' %}{% block content %}
-<h1 class="sr-only">Scholars Bowl</h1><div class="landing-grid{% if user.is_admin %} teacher-landing{% endif %}">
+{% extends 'study_base.html' %}{% load static %}{% block content %}
+<h1 class="sr-only">Scholars Bowl</h1>
+<div data-live-discovery="{% url 'scholars:live_discover' %}"><a class="destination destination-live" data-live-invitation {% if live_invitation %}href="{{ live_invitation.url }}"{% else %}hidden{% endif %}><h2 data-live-label>{{ live_invitation.label }}</h2><p data-live-title>{{ live_invitation.title }}</p></a></div>
+{% if needs_interests %}<p class="notice">Ready for individual Study? <a href="{% url 'scholars:interests' %}">Choose your interests</a>. You can join a live quiz without setting them.</p>{% endif %}
+<script type="module" src="{% static 'live-discovery.js' %}"></script><div class="landing-grid{% if user.is_admin %} teacher-landing{% endif %}">
 <a class="destination destination-study" href="{% url 'scholars:study' %}">{% include 'scholars/study/icon.html' with icon='book' %}<h2>Study</h2><p>Learn a few random topics and take a quiz!</p><span class="circle-arrow" aria-hidden="true">↗</span></a>
 <a class="destination destination-progress" href="{% url 'scholars:progress' %}">{% include 'scholars/study/icon.html' with icon='progress' %}<h2>Progress</h2><p>See your learning progress!</p><span class="circle-arrow" aria-hidden="true">↗</span></a>
 <a class="destination destination-explore" href="{% url 'scholars:library' %}">{% include 'scholars/study/icon.html' with icon='globe' %}<h2>Explore</h2><p>Freely explore the full data set!</p><span class="circle-arrow" aria-hidden="true">↗</span></a>

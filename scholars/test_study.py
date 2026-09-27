@@ -75,7 +75,8 @@ class StudyTests(TestCase):
 
     def test_onboarding_account_validation_and_cross_device_interests(self):
         self.client.force_login(self.other)
-        self.assertRedirects(self.client.get(reverse('scholars:dashboard')), reverse('scholars:interests'))
+        self.assertContains(self.client.get(reverse('scholars:dashboard')), 'Choose your interests')
+        self.assertRedirects(self.client.get(reverse('scholars:study')), reverse('scholars:interests'))
         for values in [[], ['missing'], ['Geography', 'missing']]:
             response = self.client.post(reverse('scholars:interests'), {'categories': values})
             self.assertEqual(response.status_code, 400)

@@ -2,9 +2,10 @@
 
 Implementation plan · September 26, 2026.
 
-Phases 1–3 are implemented locally; see the
-[Phase 1](TEACHER_TOOLS_PHASE1.md), [Phase 2](TEACHER_TOOLS_PHASE2.md), and
-[Phase 3](TEACHER_TOOLS_PHASE3.md) notes. Phases 4–6 remain planned. The owner confirmed that one administrator is sufficient.
+Phases 1–4 are implemented locally; see the
+[Phase 1](TEACHER_TOOLS_PHASE1.md), [Phase 2](TEACHER_TOOLS_PHASE2.md),
+[Phase 3](TEACHER_TOOLS_PHASE3.md), and [Phase 4](TEACHER_TOOLS_PHASE4.md) notes.
+Phases 5–6 remain planned. The owner confirmed that one administrator is sufficient.
 
 ## 1. Product direction and agreed decisions
 

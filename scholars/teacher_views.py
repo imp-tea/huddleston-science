@@ -24,7 +24,8 @@ def selected_student(pk):
 @administrator_required
 @require_GET
 def home(request):
-    return render(request, 'scholars/teacher/home.html', {'teacher_tools': True})
+    from .live_views import invitation
+    return render(request, 'scholars/teacher/home.html', {'teacher_tools': True, 'live_invitation': invitation(request.user)})
 
 
 @administrator_required

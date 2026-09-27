@@ -1,8 +1,18 @@
 from django.urls import path
-from . import views, study_views, discovery_views, teacher_views, quiz_views
+from . import views, study_views, discovery_views, teacher_views, quiz_views, live_views
 
 app_name = "scholars"
 urlpatterns = [
+    path("teacher/host/", live_views.host, name="live_host"),
+    path("live/status/", live_views.discover, name="live_discover"),
+    path("live/<uuid:pk>/", live_views.page, name="live_page"),
+    path("live/<uuid:pk>/state/", live_views.state, name="live_state"),
+    path("live/<uuid:pk>/suggestions/<int:position>/", live_views.suggestions, name="live_suggestions"),
+    path("live/<uuid:pk>/connect/", live_views.connect, name="live_connect"),
+    path("live/<uuid:pk>/heartbeat/", live_views.heartbeat, name="live_heartbeat"),
+    path("live/<uuid:pk>/leave/", live_views.leave, name="live_leave"),
+    path("live/<uuid:pk>/control/", live_views.control, name="live_control"),
+    path("live/<uuid:pk>/answer/", live_views.answer, name="live_answer"),
     path("teacher/quizzes/", quiz_views.index, name="quiz_list"),
     path("teacher/quizzes/random/", quiz_views.random_quiz, name="quiz_random"),
     path("teacher/quizzes/save-preview/", quiz_views.save_preview, name="quiz_save_preview"),

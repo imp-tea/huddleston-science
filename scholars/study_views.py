@@ -21,9 +21,9 @@ from .study import (abandon_study, active_session, move_reading, picker, prefere
 @login_required
 @require_GET
 def home(request):
-    if not request.user.is_admin and not preferences_ready(request.user):
-        return redirect("scholars:interests")
-    return render(request, "scholars/study/home.html")
+    from .live_views import invitation
+    return render(request, "scholars/study/home.html", {'live_invitation': invitation(request.user),
+        'needs_interests': not preferences_ready(request.user) and not request.user.is_admin})
 
 
 def interests_form(user, data=None):

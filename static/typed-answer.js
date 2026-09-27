@@ -1,10 +1,10 @@
 import Quiz from './typed-matching.js';
-const form = document.querySelector('.typed-answer');
+export function attachAutocomplete(form, initialBank) {
 const input = form.querySelector('#id_typed_answer');
 const list = form.querySelector('#answer-suggestions');
 const status = form.querySelector('#answer-status');
 // The server prepares this view once from the pinned bank. Searches stay local.
-const bank = JSON.parse(document.querySelector('#typed-bank').textContent).index;
+let bank = initialBank;
 input.setAttribute('role', 'combobox');
 input.setAttribute('aria-autocomplete', 'list');
 input.setAttribute('aria-expanded', 'false');
@@ -65,3 +65,8 @@ input.addEventListener('compositionend', () => { composing = false; });
 form.addEventListener('submit', event => {
   if (composing) event.preventDefault();
 });
+
+return {setBank(nextBank) { bank = nextBank; matches = []; close(); status.textContent = ''; }};
+}
+const bankElement = document.querySelector('#typed-bank');
+if (bankElement) attachAutocomplete(document.querySelector('.typed-answer'), JSON.parse(bankElement.textContent).index);

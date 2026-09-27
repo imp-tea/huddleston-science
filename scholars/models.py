@@ -363,3 +363,85 @@ class SavedQuizItem(models.Model):
                                     deferrable=models.Deferrable.DEFERRED),
             models.CheckConstraint(condition=models.Q(position__gte=1), name='saved_quiz_position_positive'),
         ]
+
+
+class LiveQuiz(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    host = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='hosted_games')
+    quiz = models.ForeignKey(SavedQuiz, null=True, on_delete=models.SET_NULL)
+    request_key = models.UUIDField()
+    title = models.CharField(max_length=160)
+    phase = models.CharField(max_length=12, default='waiting', choices=[(s, s.title()) for s in ['waiting', 'running', 'finished', 'cancelled']])
+    version = models.PositiveIntegerField(default=0)
+    position = models.PositiveSmallIntegerField(default=0)
+    question_count = models.PositiveSmallIntegerField()
+    grading_version = models.CharField(max_length=30)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True)
+    ended_at = models.DateTimeField(null=True)
+    ended_early = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['host', 'request_key'], name='unique_live_host_request'),
+            models.UniqueConstraint(models.Value(1), condition=models.Q(phase__in=['waiting', 'running']), name='one_open_live_quiz'),
+        ]
+
+
+class LiveQuizQuestion(models.Model):
+    game = models.ForeignKey(LiveQuiz, on_delete=models.CASCADE, related_name='questions')
+    position = models.PositiveSmallIntegerField()
+    revision = models.ForeignKey(QuestionRevision, on_delete=models.PROTECT)
+    answer_bank = models.ForeignKey(AnswerBank, on_delete=models.PROTECT)
+    topic_id_snapshot = models.CharField(max_length=100)
+    topic_title = models.CharField(max_length=500)
+    category = models.CharField(max_length=100)
+    opened_at = models.DateTimeField(null=True)
+    closed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        ordering = ['position']
+        constraints = [models.UniqueConstraint(fields=['game', 'position'], name='unique_live_question_position')]
+
+
+class LiveParticipant(models.Model):
+    game = models.ForeignKey(LiveQuiz, on_delete=models.CASCADE, related_name='participants')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='live_participations')
+    joined_at = models.DateTimeField(auto_now_add=True)
+    roster_at = models.DateTimeField(null=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['game', 'user'], name='unique_live_participant')]
+
+
+class LiveConnection(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    game = models.ForeignKey(LiveQuiz, on_delete=models.CASCADE, related_name='connections')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    last_seen = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['game', 'last_seen'], name='live_presence_lookup')]
+
+
+class LiveResponse(models.Model):
+    participant = models.ForeignKey(LiveParticipant, on_delete=models.CASCADE, related_name='responses')
+    question = models.ForeignKey(LiveQuizQuestion, on_delete=models.CASCADE, related_name='responses')
+    status = models.CharField(max_length=12, choices=[(s, s.title()) for s in ['correct', 'incorrect', 'skipped', 'unanswered']])
+    typed_answer = models.CharField(max_length=240, blank=True)
+    finalized_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['participant', 'question'], name='unique_live_response')]
+
+
+class LiveTransition(models.Model):
+    game = models.ForeignKey(LiveQuiz, on_delete=models.CASCADE, related_name='transitions')
+    request_key = models.UUIDField()
+    action = models.CharField(max_length=12)
+    expected_version = models.PositiveIntegerField()
+    expected_position = models.PositiveSmallIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['game', 'request_key'], name='unique_live_transition')]
