@@ -1,5 +1,13 @@
 # Deploy the Scholars Bowl redesign
 
+Phase 2 adds Teacher Tools and read-only student reports with no additional
+migration or dependencies. After updating, verify the administrator's new Scholars
+Bowl home card and navigation link, search for a student, and compare their weekly
+goal, calendar, and topic completion with that student's own Progress page. Inspect
+a saved attempt without changing it. Students must not see or access Teacher Tools.
+Quiz Creator and Host a Quiz remain explicitly upcoming. Migration `0008` is still
+required if Phase 1 has not yet been deployed.
+
 Teacher question authoring adds migration `0008`; use the migration/import steps
 below before restarting the updated application. Teacher-created questions and
 edits now live in PostgreSQL and are included in the normal full-database backup.

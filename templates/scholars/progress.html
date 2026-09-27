@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Previous practice statistics · Scholars Bowl{% endblock %}
 {% block content %}
+{% if progress_owner.pk != user.pk %}<p><a href="{% url 'scholars:student_progress' progress_owner.pk %}">← {{ progress_owner.username }}’s current Study progress</a></p><p>These are older practice statistics. Current Study completions and weekly goals are shown on the student’s Progress page.</p>{% endif %}
 <h1>{% if progress_owner.pk != user.pk %}{{ progress_owner.username }} · {% endif %}Previous practice statistics</h1>
 <form method="get" class="inline-form"><label for="category">Category</label><select id="category" name="category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c.pk }}" {% if category == c.pk %}selected{% endif %}>{{ c.pk }}</option>{% endfor %}</select><button class="secondary">Show</button></form>
 <dl class="stats"><div><dt>Topics studied</dt><dd>{{ coverage.total.studied }} / {{ coverage.total.total }}</dd></div><div><dt>Topics practiced</dt><dd>{{ coverage.total.practiced }} / {{ coverage.total.total }}</dd></div><div><dt>Multiple choice · last 30 days</dt><dd>{{ coverage.total.correct }} / {{ coverage.total.answers }}</dd></div></dl>

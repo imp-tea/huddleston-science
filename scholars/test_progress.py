@@ -98,7 +98,7 @@ class ProgressTests(TestCase):
         response = self.client.get(reverse('scholars:legacy_progress'), {'user': self.other.pk})
         self.assertEqual(response.context['coverage']['total']['studied'], 0)
         self.assertEqual(response.context['participation']['xp'], 0)
-        url = reverse('scholars:student_progress', args=[self.other.pk])
+        url = reverse('scholars:legacy_student_progress', args=[self.other.pk])
         self.assertEqual(self.client.get(url).status_code, 403)
         self.client.force_login(self.admin)
         response = self.client.get(url)

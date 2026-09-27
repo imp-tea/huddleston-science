@@ -2,8 +2,9 @@
 
 Implementation plan · September 26, 2026.
 
-Phase 1 is implemented locally; see [implementation and validation notes](TEACHER_TOOLS_PHASE1.md).
-Phases 2–6 remain planned. The owner confirmed that one administrator is sufficient.
+Phases 1 and 2 are implemented locally; see the
+[Phase 1](TEACHER_TOOLS_PHASE1.md) and [Phase 2](TEACHER_TOOLS_PHASE2.md) notes.
+Phases 3–6 remain planned. The owner confirmed that one administrator is sufficient.
 
 ## 1. Product direction and agreed decisions
 
@@ -96,9 +97,9 @@ once available. Keep older practice history accessible and labeled separately.
 Admin history/detail routes must be read-only: viewing another student's records
 must never impersonate the student or submit/advance their work.
 
-The existing `student_progress` route uses legacy practice calculations. Update
-its destination or provide a clear link to the new view so Admin and Teacher Tools
-do not present conflicting definitions of progress.
+Phase 2 updates the existing `student_progress` route to current Study progress,
+so Admin and Teacher Tools use the same definition. Older practice statistics
+remain available through `legacy_student_progress` and are explicitly labeled.
 
 ## 3. Shared question bank and import protection
 

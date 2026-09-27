@@ -3,6 +3,11 @@ from . import views, study_views, discovery_views, teacher_views
 
 app_name = "scholars"
 urlpatterns = [
+    path("teacher/", teacher_views.home, name="teacher_home"),
+    path("teacher/students/", teacher_views.students, name="teacher_students"),
+    path("teacher/students/<uuid:pk>/history/", teacher_views.student_history, name="teacher_student_history"),
+    path("teacher/students/<uuid:pk>/study/<uuid:session_id>/", teacher_views.study_detail, name="teacher_study_detail"),
+    path("teacher/students/<uuid:pk>/practice/<uuid:session_id>/", teacher_views.practice_detail, name="teacher_practice_detail"),
     path("teacher/topics/<str:topic_id>/questions/new/", teacher_views.question_create, name="question_create"),
     path("teacher/questions/<str:question_id>/edit/", teacher_views.question_edit, name="question_edit"),
     path("teacher/questions/<str:question_id>/<str:action>/", teacher_views.question_action, name="question_action"),
@@ -25,7 +30,8 @@ urlpatterns = [
     path("topics/<str:pk>/studied/", views.studied, name="studied"),
     path("progress/", discovery_views.progress, name="progress"),
     path("progress/goal/", views.goal, name="goal"),
-    path("progress/students/<uuid:pk>/", views.student_progress, name="student_progress"),
+    path("progress/students/<uuid:pk>/", teacher_views.student_progress, name="student_progress"),
+    path("practice/progress/students/<uuid:pk>/", views.student_progress, name="legacy_student_progress"),
     path("practice/start/", views.start, name="start"),
     path("practice/<uuid:pk>/", views.session_view, name="session"),
     path("practice/<uuid:pk>/end/", views.abandon, name="abandon"),

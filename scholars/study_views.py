@@ -21,7 +21,7 @@ from .study import (abandon_study, active_session, move_reading, picker, prefere
 @login_required
 @require_GET
 def home(request):
-    if not preferences_ready(request.user):
+    if not request.user.is_admin and not preferences_ready(request.user):
         return redirect("scholars:interests")
     return render(request, "scholars/study/home.html")
 

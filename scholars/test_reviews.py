@@ -281,7 +281,7 @@ class ReviewTests(TestCase):
         self.client.force_login(self.other)
         response = self.client.get(reverse('scholars:legacy_progress'), {'user': self.user.pk})
         self.assertEqual(response.context['reviews'][1]['total']['practicing'], 0)
-        admin_url = reverse('scholars:student_progress', args=[self.user.pk])
+        admin_url = reverse('scholars:legacy_student_progress', args=[self.user.pk])
         self.assertEqual(self.client.get(admin_url).status_code, 403)
         self.client.force_login(self.admin)
         response = self.client.get(admin_url)

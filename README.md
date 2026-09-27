@@ -78,7 +78,7 @@ To stop it, use the same `pg_ctl` executable with `-D .local/pgdata stop`. New c
 7. **Explore** browses all active categories, subcategories, and topics, independent of interests. Search and reading never grant completion. **Account** changes interests, username, or password without losing progress.
 8. The footer's **Study history & previous results** retains Study sessions and older practice results.
 
-The administrator can reset credentials, disable/re-enable accounts, and delete a student with confirmation. Deletion removes that student's sessions, answers, preferences, and completions; disabling preserves them. Existing administrator student-statistics pages still report legacy practice rather than the new Study totals. The sole administrator is protected against deletion, disabling, and demotion, including ordinary database writes.
+The administrator can reset credentials, disable/re-enable accounts, and delete a student with confirmation. Deletion removes that student's sessions, answers, preferences, and completions; disabling preserves them. Administrator progress links open current Study progress and read-only history; older practice statistics remain separately labeled and accessible. The sole administrator is protected against deletion, disabling, and demotion, including ordinary database writes.
 
 ### Recovery and authentication
 
@@ -103,8 +103,15 @@ questions and autocomplete banks. Imported questions retain a separate baseline:
 an import never overwrites the teacher version, and a changed baseline is flagged
 for comparison. **Restore Imported Version** switches future sessions back to it.
 Teacher-created questions can be archived/restored without deleting history.
-Quiz lists, the Teacher Tools hub, and live hosting are later phases of
-[the implementation plan](docs/TEACHER_TOOLS_AND_LIVE_QUIZZES.md).
+The administrator's Scholars Bowl home now includes **Teacher Tools**, also in
+the Scholars Bowl navigation. **View Student Progress** searches all student
+accounts (including disabled accounts) and shows the selected student's current
+weekly goal, activity calendar, topic completion, and recent/full history. Study
+attempts and older practice records open in read-only report pages. The existing
+Admin progress link now opens this same current view; older practice statistics
+are labeled separately. Teachers can reach the hub without choosing personal
+Study interests. Quiz Creator and Host a Quiz are labeled as upcoming features
+until their later phases in [the implementation plan](docs/TEACHER_TOOLS_AND_LIVE_QUIZZES.md).
 
 Migration `0008` adds authoring provenance and seeds the imported baseline from
 each existing question's current revision. Apply it before running the updated
