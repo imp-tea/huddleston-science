@@ -1,0 +1,31 @@
+<section class="teacher-tools" aria-label="Teacher topic tools">
+<p class="eyebrow">Teacher tools · Current question bank</p>
+<details class="teacher-panel" id="teacher-questions" {% if request.GET.questions == '1' %}open{% endif %}>
+  <summary>Quiz Questions <span class="muted">({{ teacher_questions|length }})</span></summary>
+  <div class="teacher-panel-body">
+  <p class="muted">Changes apply to future sessions. Sessions already underway keep their saved questions.</p>
+  {% if teacher_topic.active %}<a class="secondary-button" href="{% url 'scholars:question_create' teacher_topic.pk %}">Add New Question</a>{% endif %}
+  {% for question in teacher_questions %}<article class="teacher-question">
+    <div class="teacher-question-heading"><span class="eyebrow">{{ question.get_format_display }} · {% if question.origin == 'teacher' %}Teacher-created{% elif question.override_revision_id %}Teacher-edited{% else %}Imported{% endif %}{% if not question.active %} · Archived{% endif %}</span>
+    {% if teacher_topic.active %}<details class="question-menu"><summary aria-label="Actions for question {{ forloop.counter }}"><span aria-hidden="true">⋯</span></summary><div>
+      {% if question.active %}<a href="{% url 'scholars:question_edit' question.pk %}">Edit Question</a>{% endif %}
+      {% if question.origin == 'teacher' %}{% if question.active %}<a href="{% url 'scholars:question_action' question.pk 'archive' %}">Archive Question</a>{% else %}<a href="{% url 'scholars:question_action' question.pk 'reactivate' %}">Restore Question</a>{% endif %}{% elif question.override_revision_id and question.active %}<a href="{% url 'scholars:question_action' question.pk 'restore_imported' %}">Restore Imported Version</a>{% endif %}
+    </div></details>{% endif %}</div>
+    <p class="teacher-question-text">{{ question.current_revision.payload.question }}</p>
+    <p><strong>Answer:</strong> {{ question.current_revision.payload.correct_answer }}</p>
+    {% if question.current_revision.payload.distractors %}<p><strong>Other choices:</strong></p><ul>{% for choice in question.current_revision.payload.distractors %}<li>{{ choice }}</li>{% endfor %}</ul>{% endif %}
+    {% if question.current_revision.payload.explanation %}<p><strong>Explanation:</strong> {{ question.current_revision.payload.explanation }}</p>{% endif %}
+    {% if question.current_revision.author %}<p class="muted">Edited by {{ question.current_revision.author.username }} · {{ question.current_revision.created_at|date:'M j, Y · g:i a' }}</p>{% endif %}
+    {% if question.import_changed %}<p class="form-notice">The imported version changed after your edit. Your version is still in use. Open Edit Question to compare and review it.</p>{% endif %}
+  </article>{% empty %}<p>No quiz questions yet. Add the first question for this topic.</p>{% endfor %}
+  </div>
+</details>
+<details class="teacher-panel"><summary>Source Questions <span class="muted">({{ teacher_sources|length }})</span></summary><div class="teacher-panel-body">
+  <p class="muted">Original tournament questions, preserved as read-only source material.</p>
+  {% for source in teacher_sources %}<article class="teacher-question">
+    <h2>{{ source.payload.source|default:'Tournament source' }}</h2>
+    <p class="muted">{{ source.payload.level }} · {{ source.payload.question_type }}{% if source.payload.round %} · Round {{ source.payload.round }}{% endif %}{% if source.payload.number %} · Question {{ source.payload.number }}{% endif %}</p>
+    {% for part in source.payload.parts %}<div class="source-part"><p>{% if part.label %}<strong>{{ part.label }}.</strong> {% endif %}{{ part.question }}</p>{% if part.answer %}<p><strong>Answer:</strong> {{ part.answer }}</p>{% endif %}</div>{% endfor %}
+  </article>{% empty %}<p>No tournament source questions are attached to this topic.</p>{% endfor %}
+</div></details>
+</section>

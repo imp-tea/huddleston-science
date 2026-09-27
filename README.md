@@ -91,7 +91,30 @@ The administrator can reset credentials, disable/re-enable accounts, and delete 
 
 ## Educational content and repeatable imports
 
-`data/` remains authoritative. Edit its JSON files, then run:
+`data/` remains authoritative for imported content. Administrator question edits
+and new questions are stored in PostgreSQL and survive imports. On an Explore
+topic page, expand **Quiz Questions** to create a typed question or use its **⋯**
+menu to edit a question. **Source Questions** shows the original read-only
+tournament material. These panels are available only to the administrator,
+including on topic-reading pages.
+
+Teacher edits apply to future sessions; existing sessions keep their pinned
+questions and autocomplete banks. Imported questions retain a separate baseline:
+an import never overwrites the teacher version, and a changed baseline is flagged
+for comparison. **Restore Imported Version** switches future sessions back to it.
+Teacher-created questions can be archived/restored without deleting history.
+Quiz lists, the Teacher Tools hub, and live hosting are later phases of
+[the implementation plan](docs/TEACHER_TOOLS_AND_LIVE_QUIZZES.md).
+
+Migration `0008` adds authoring provenance and seeds the imported baseline from
+each existing question's current revision. Apply it before running the updated
+application or importer. Full database backups now protect teacher-authored
+content as well as student records. A portable export is available with
+`python manage.py export_teacher_questions /path/to/new-export.json`; it contains
+question revisions/provenance and no student records. It is supplementary to the
+database backup, not an input to `import_content`.
+
+For imported content, edit its JSON files, then run:
 
 ```sh
 python manage.py import_content

@@ -1,8 +1,9 @@
-"""JSON remains authoritative. Import in one transaction; never delete learning records."""
+"""JSON owns imported baselines; teacher revisions and learning history survive imports."""
 import hashlib
 import json
 from django.core.exceptions import ValidationError
 from django.db import connection, transaction
+from django.db.models import F
 from scripts.build import load_and_validate
 from scripts.typed_content import load_typed_questions
 from django.conf import settings
@@ -43,6 +44,8 @@ def import_content(data_dir=None, allow_retire=False):
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", [CONTENT_LOCK])
         for model, ids in incoming:
             missing = model.objects.filter(active=True).exclude(pk__in=ids)
+            if model is Question:
+                missing = missing.filter(origin=Question.Origin.IMPORTED)
             if missing.exists() and not allow_retire:
                 raise ValidationError(f"Import removes {model.__name__} records. Review the source, then use --allow-retire.")
         for tid, subject in Topic.objects.values_list("id", "subject_id"):
@@ -50,6 +53,9 @@ def import_content(data_dir=None, allow_retire=False):
                 raise ValidationError(f"Cannot reuse topic identity {tid} for a different subject.")
         question_topics = {q["question_id"]: q["study_topic_id"] for q in practice}
         question_formats = {q["question_id"]: q.get("format", "multiple_choice") for q in practice}
+        if any(qid.startswith('teacher-') for qid in question_topics) or Question.objects.filter(
+                pk__in=question_topics, origin=Question.Origin.TEACHER).exists():
+            raise ValidationError("Imported questions cannot use teacher-created identities.")
         for qid, tid, format in Question.objects.values_list("id", "topic_id", "format"):
             if qid in question_topics and question_topics[qid] != tid:
                 raise ValidationError(f"Cannot move question identity {qid} to a different topic.")
@@ -68,7 +74,8 @@ def import_content(data_dir=None, allow_retire=False):
             Topic.subcategories.through(topic_id=t["study_topic_id"], subcategory_id=sid)
             for t in topics for sid in t["subcategory_ids"]], batch_size=500)
         upsert(TopicRedirect, [TopicRedirect(id=old, topic_id=target) for old, target in redirects.items()], ["topic", "active"])
-        upsert(Question, [Question(id=q["question_id"], topic_id=q["study_topic_id"], format=q.get("format", "multiple_choice")) for q in practice], ["topic", "format", "active"])
+        # Preserve local provenance and override pointers; update availability below.
+        upsert(Question, [Question(id=q["question_id"], topic_id=q["study_topic_id"], format=q.get("format", "multiple_choice")) for q in practice], ["topic", "format"])
         contexts = {tid: {"topic": t, "study_content": content.get(tid, {}),
                           "sources": {sid: sources[sid] for sid in t["source_ids"]}}
                     for tid, t in topic_map.items()}
@@ -82,10 +89,22 @@ def import_content(data_dir=None, allow_retire=False):
                 revisions.append(QuestionRevision(question_id=q["question_id"], digest=revision_hash, payload=q, context=context))
         QuestionRevision.objects.bulk_create(revisions, batch_size=100)
         existing.update({(r.question_id, r.digest): r.pk for r in revisions})
-        Question.objects.bulk_update([Question(id=qid, current_revision_id=existing[qid, h]) for qid, h in hashes.items()],
-                                     ["current_revision"], batch_size=500)
+        questions = list(Question.objects.filter(pk__in=hashes))
+        for question in questions:
+            baseline = existing[question.pk, hashes[question.pk]]
+            if question.imported_revision_id != baseline or not question.active:
+                question.edit_version += 1
+            question.imported_revision_id = baseline
+            question.current_revision_id = question.override_revision_id or baseline
+            question.active = True
+        Question.objects.bulk_update(questions,
+            ["imported_revision", "current_revision", "active", "edit_version"], batch_size=500)
         for model, ids in incoming:
-            model.objects.exclude(pk__in=ids).update(active=False)
+            missing = model.objects.exclude(pk__in=ids)
+            if model is Question:
+                missing.filter(origin=Question.Origin.IMPORTED, active=True).update(active=False, edit_version=F('edit_version') + 1)
+            else:
+                missing.update(active=False)
         from .typed_answers import rebuild_banks
         rebuild_banks()
         ContentImport.objects.create(digest=digest([data, typed]), counts=counts)

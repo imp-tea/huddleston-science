@@ -8,6 +8,14 @@ Before rollout, confirm those details, DNS A/AAAA records, existing services usi
 
 ## Server layout and prerequisites
 
+Teacher question authoring (migration `0008`) stores edits and new questions in
+PostgreSQL. Apply migrations before running the updated importer/application.
+Existing full-database backups include the new provenance and revision records;
+reimporting JSON cannot recover teacher work. Verify backups before upgrading and
+do not run a pre-authoring importer against this database. See
+[content maintenance](docs/CONTENT_WORKFLOW.md#teacher-question-authoring) for the
+supplementary authoring export. This phase adds no server service or dependency.
+
 Use a dedicated unprivileged `huddleston` service account, with no interactive login. Only trusted operators can log into this server or change application code/configuration. Install supported Python 3.10+, PostgreSQL 14+ (17 is locally validated), matching PostgreSQL client tools, and Caddy through the OS's supported installation process. Two Gunicorn workers are an initial setting to measure against the droplet’s actual resources.
 
 | Location | Purpose / permissions |

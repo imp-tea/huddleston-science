@@ -1,0 +1,10 @@
+{% extends 'study_base.html' %}{% block title %}{{ heading }} · {{ topic.title }}{% endblock %}{% block content %}
+<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'scholars:library' %}">Explore</a><span aria-hidden="true">/</span><a href="{% url 'scholars:topic' topic.pk %}">{{ topic.title }}</a><span aria-hidden="true">/</span><span aria-current="page">{{ heading }}</span></nav>
+<div class="reader-shell"><section class="reading-card teacher-form"><h1>{{ heading }}</h1>
+<p class="muted">{{ topic.title }} · {% if question %}{{ question.get_format_display }}{% else %}Typed answer{% endif %}</p>
+<p>Save to the shared question bank for future quizzes. Existing sessions and results keep their original version.</p>
+{% if question.import_changed %}<p class="form-notice">The imported version has changed. Compare it below before saving. Saving acknowledges this baseline while keeping your edited version.</p>{% endif %}
+{% if question.imported_revision_id %}<details class="teacher-baseline"><summary>Compare with current imported version</summary><p>{{ question.imported_revision.payload.question }}</p><p><strong>Answer:</strong> {{ question.imported_revision.payload.correct_answer }}</p>{% for choice in question.imported_revision.payload.distractors %}<p>{{ choice }}</p>{% endfor %}{% if question.imported_revision.payload.explanation %}<p>{{ question.imported_revision.payload.explanation }}</p>{% endif %}</details>{% endif %}
+<form method="post">{% csrf_token %}{{ form.as_p }}<div class="actions"><button class="primary-button">Save Question</button><a class="secondary-button" href="{% url 'scholars:topic' topic.pk %}?questions=1#teacher-questions">Cancel</a></div></form>
+{% if form.non_field_errors and question %}<p><a href="{% url 'scholars:question_edit' question.pk %}">Reload the latest version</a> (copy any unsaved wording first).</p>{% endif %}
+</section></div>{% endblock %}

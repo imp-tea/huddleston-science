@@ -1,10 +1,53 @@
 # Study content and local research
 
-`data/` is the versioned source of truth for the classroom application. Study
+`data/` is the versioned source of truth for imported classroom content. Teacher
+question edits and new questions are authoritative in PostgreSQL; see below. Study
 paragraphs, facts, supporting URLs, reference titles, publishers, and available
 license/retrieval metadata are retained in `data/content.json`. Tournament
 questions and their attribution remain in `data/sources.json` and `data/topics.json`.
 The application and its importer do not read `research/`.
+
+## Teacher question authoring
+
+The administrator can expand **Quiz Questions** on topic pages to create typed
+questions and edit existing typed or multiple-choice questions. Question type and
+topic identity cannot change through the editor. Multiple-choice questions retain
+four distinct choices and an explanation. New typed answers are limited to 240
+characters to match the existing response field. **Source Questions** exposes
+original tournament text and answers to the administrator only, as read-only
+provenance.
+
+Every content edit creates or reuses an immutable revision. The effective revision
+is used by new Study sessions and, later, saved teacher quizzes. In-progress
+sessions keep their old revisions and autocomplete banks. Teacher edits refresh
+the affected category's bank in the same transaction. Conflicting edits from an
+older tab are rejected instead of overwriting a newer change.
+
+Imports update a separate imported baseline. A teacher override stays effective;
+if the baseline changes, the topic panel flags it for review. Open **Edit Question**
+to compare and save your version, or **Restore Imported Version** to use the latest
+baseline again. Original sources and JSON files are never rewritten by the editor.
+Teacher-created questions use reserved `teacher-<uuid>` identities and are excluded
+from import removal checks. They can be archived/restored locally. Retiring an
+imported question or its topic removes it from new selection but preserves history.
+
+After authoring is introduced, JSON plus Git is no longer a full backup of the
+question bank. The existing PostgreSQL backup/verified-restore workflow includes
+all authoring fields and revisions. For a supplementary portable export:
+
+```sh
+python manage.py export_teacher_questions /existing/private/directory/questions-2026-09-26.json
+```
+
+The command exclusively creates a mode-600 JSON file and refuses to overwrite an
+existing file. It includes authored questions (including archived ones), edited
+imported-question histories, effective/baseline/override pointers, timestamps,
+author IDs, and pinned source context. It excludes student accounts and responses.
+Keep exports outside tracked `data/`; this schema is not accepted by `import_content`.
+Restore the complete database backup for normal recovery. There is no automatic
+merge/import tool for these supplementary exports in Phase 1.
+
+## Imported question and reading content
 
 The approved typed/recall question bank is versioned in
 `data/typed-questions.json` (15,947 questions). Original multiple-choice questions

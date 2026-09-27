@@ -49,11 +49,24 @@ class TopicRedirect(models.Model):
 
 
 class Question(models.Model):
+    class Origin(models.TextChoices):
+        IMPORTED = "imported", "Imported"
+        TEACHER = "teacher", "Teacher-created"
+
     id = models.CharField(max_length=100, primary_key=True)
     format = models.CharField(max_length=20, default="multiple_choice", choices=[("multiple_choice", "Multiple choice"), ("typed", "Typed")], db_index=True)
     topic = models.ForeignKey(Topic, on_delete=models.PROTECT)
     current_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
     active = models.BooleanField(default=True)
+    origin = models.CharField(max_length=10, choices=Origin.choices, default=Origin.IMPORTED)
+    imported_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
+    override_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
+    override_base_revision = models.ForeignKey("QuestionRevision", on_delete=models.PROTECT, null=True, related_name="+")
+    edit_version = models.PositiveIntegerField(default=0)
+
+    @property
+    def import_changed(self):
+        return bool(self.override_revision_id and self.override_base_revision_id != self.imported_revision_id)
 
 
 class QuestionRevision(models.Model):
@@ -63,6 +76,7 @@ class QuestionRevision(models.Model):
     # Snapshot topic, study prose, and referenced source attribution as well as question text.
     context = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="question_revisions")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["question", "digest"], name="unique_question_revision")]

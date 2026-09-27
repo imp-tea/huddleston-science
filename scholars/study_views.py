@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from .typed_answers import for_item
+from .question_authoring import topic_tools
 from .forms import InterestsForm, ReadingMoveForm, StudyAnswerForm, StudyStartForm
 from .models import Category, StudyAnswer, StudyPreferences, StudySession, Topic
 from .study import (abandon_study, active_session, move_reading, picker, preferences_ready,
@@ -133,7 +134,10 @@ def session_view(request, pk):
     # Keep the phase and its attempt/reading position consistent during rendering.
     # This read takes only the session lock and never acquires an account lock.
     session = owned_session(request, pk, lock=True)
-    return render(request, "scholars/study/session.html", session_context(session))
+    context = session_context(session)
+    if context.get('card'):
+        context.update(topic_tools(request.user, context['card']['id']))
+    return render(request, "scholars/study/session.html", context)
 
 
 @login_required
@@ -143,7 +147,8 @@ def passed_review(request, pk, topic_id):
     attempt = session.attempts.order_by("-number").first()
     missed = attempt.answers.filter(is_correct=False).values("question__session_topic_id")
     topic = get_object_or_404(session.topics, topic_id=topic_id, pk__in=missed)
-    return render(request, "scholars/study/passed_review.html", {"session": session, "card": topic.content})
+    return render(request, "scholars/study/passed_review.html", {"session": session, "card": topic.content,
+        **topic_tools(request.user, topic.topic_id)})
 
 
 @login_required

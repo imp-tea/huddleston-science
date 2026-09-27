@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET
 from .discovery import calendar_progress, coverage_rows
 from .models import Category, Subcategory, Topic, TopicCompletion, TopicRedirect
 from .study import reading_snapshot
+from .question_authoring import topic_tools
 
 
 def library_url(category='', subcategory=''):
@@ -89,4 +90,5 @@ def topic(request, pk):
         crumbs.append({'label': sub.payload.get('label', sub.pk), 'url': library_url(entry.category_id, sub.pk)})
     crumbs.append({'label': entry.title})
     return render(request, 'scholars/study/explore_topic.html', {'card': reading_snapshot(entry), 'crumbs': crumbs,
-        'completion': TopicCompletion.objects.filter(user=request.user, topic=entry).first()})
+        'completion': TopicCompletion.objects.filter(user=request.user, topic=entry).first(),
+        **topic_tools(request.user, entry.pk)})

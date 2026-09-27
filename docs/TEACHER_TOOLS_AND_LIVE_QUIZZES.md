@@ -1,6 +1,9 @@
 # Teacher Tools and live quizzes
 
-Implementation plan · September 26, 2026 · Planning only; no application changes yet.
+Implementation plan · September 26, 2026.
+
+Phase 1 is implemented locally; see [implementation and validation notes](TEACHER_TOOLS_PHASE1.md).
+Phases 2–6 remain planned. The owner confirmed that one administrator is sufficient.
 
 ## 1. Product direction and agreed decisions
 

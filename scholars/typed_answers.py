@@ -152,17 +152,22 @@ def grade(answer, correct_answer, allow_prompt=True, suppressed_answers=()):
     return 'prompt' if 1 - distance(given, expected) / length >= .85 else 'incorrect'
 
 
-def rebuild_banks():
+def rebuild_banks(category_ids=None):
     """Called under the import lock; old banks remain protected by session items."""
     from .models import AnswerBank, Category, Question
     from .importer import digest
     from .question_pools import current_questions
     banks = {}
-    for category, payload in current_questions('typed').order_by('pk').values_list('topic__category_id', 'current_revision__payload'):
+    questions = current_questions('typed')
+    categories = Category.objects.all()
+    if category_ids is not None:
+        questions = questions.filter(topic__category_id__in=category_ids)
+        categories = categories.filter(pk__in=category_ids)
+    for category, payload in questions.order_by('pk').values_list('topic__category_id', 'current_revision__payload'):
         bank = banks.setdefault(category, {})
         for answer in [payload['correct_answer'], *payload.get('distractors', [])]:
             bank.setdefault(answer_key(answer), answer.strip())
-    for category in Category.objects.all():
+    for category in categories:
         bank = banks.get(category.pk, {})
         answers = [bank[key] for key in sorted(bank)]
         version = digest([VERSION, category.pk, answers])

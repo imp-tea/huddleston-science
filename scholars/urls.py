@@ -1,8 +1,11 @@
 from django.urls import path
-from . import views, study_views, discovery_views
+from . import views, study_views, discovery_views, teacher_views
 
 app_name = "scholars"
 urlpatterns = [
+    path("teacher/topics/<str:topic_id>/questions/new/", teacher_views.question_create, name="question_create"),
+    path("teacher/questions/<str:question_id>/edit/", teacher_views.question_edit, name="question_edit"),
+    path("teacher/questions/<str:question_id>/<str:action>/", teacher_views.question_action, name="question_action"),
     path("", study_views.home, name="dashboard"),
     path("interests/", study_views.interests, name="interests"),
     path("study/", study_views.study, name="study"),

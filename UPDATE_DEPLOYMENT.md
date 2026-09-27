@@ -1,5 +1,15 @@
 # Deploy the Scholars Bowl redesign
 
+Teacher question authoring adds migration `0008`; use the migration/import steps
+below before restarting the updated application. Teacher-created questions and
+edits now live in PostgreSQL and are included in the normal full-database backup.
+Do not replace the database with a fresh JSON import or run the old importer after
+this upgrade. After updating, sign in as administrator, open an Explore topic,
+expand **Quiz Questions** and **Source Questions**, and verify create/edit/restore.
+Verify with a student account that these panels and direct editing URLs are
+unavailable. See [authoring maintenance](docs/CONTENT_WORKFLOW.md#teacher-question-authoring)
+for export and recovery details. No new infrastructure is needed for Phase 1.
+
 ## Choose the path that matches the server
 
 The original deployment ran an extracted package at
