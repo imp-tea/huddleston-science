@@ -9,6 +9,7 @@
     <div class="teacher-question-heading"><span class="eyebrow">{{ question.get_format_display }} · {% if question.origin == 'teacher' %}Teacher-created{% elif question.override_revision_id %}Teacher-edited{% else %}Imported{% endif %}{% if not question.active %} · Archived{% endif %}</span>
     {% if teacher_topic.active %}<details class="question-menu"><summary aria-label="Actions for question {{ forloop.counter }}"><span aria-hidden="true">⋯</span></summary><div>
       {% if question.active %}<a href="{% url 'scholars:question_edit' question.pk %}">Edit Question</a>{% endif %}
+      {% if question.active and question.format == 'typed' %}<a href="{% url 'scholars:quiz_add' question.pk %}">Add Question to Quiz</a>{% endif %}
       {% if question.origin == 'teacher' %}{% if question.active %}<a href="{% url 'scholars:question_action' question.pk 'archive' %}">Archive Question</a>{% else %}<a href="{% url 'scholars:question_action' question.pk 'reactivate' %}">Restore Question</a>{% endif %}{% elif question.override_revision_id and question.active %}<a href="{% url 'scholars:question_action' question.pk 'restore_imported' %}">Restore Imported Version</a>{% endif %}
     </div></details>{% endif %}</div>
     <p class="teacher-question-text">{{ question.current_revision.payload.question }}</p>

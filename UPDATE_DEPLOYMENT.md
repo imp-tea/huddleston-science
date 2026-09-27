@@ -1,11 +1,23 @@
 # Deploy the Scholars Bowl redesign
 
+Phase 3 adds Quiz Creator and requires migration `0009_saved_quizzes`. Back up the
+full PostgreSQL database, apply migrations, collect static files, then restart the
+application using the deployment steps below. No packages or services were added.
+Smoke-test creating a named quiz, adding a typed question from a topic's menu,
+reordering it, editing/reviewing a question, and previewing/saving a random quiz.
+Students must not see quiz lists or access teacher quiz routes. Saved lists live
+in PostgreSQL and cannot be recreated from the repository's content JSON. A
+supplementary export is available with `python manage.py export_saved_quizzes
+/path/to/new-quizzes.json`; restore a full database backup for recovery. Keep
+migration 0009 applied when rolling application code back; reversing it drops quiz
+lists. Host a Quiz remains upcoming.
+
 Phase 2 adds Teacher Tools and read-only student reports with no additional
 migration or dependencies. After updating, verify the administrator's new Scholars
 Bowl home card and navigation link, search for a student, and compare their weekly
 goal, calendar, and topic completion with that student's own Progress page. Inspect
 a saved attempt without changing it. Students must not see or access Teacher Tools.
-Quiz Creator and Host a Quiz remain explicitly upcoming. Migration `0008` is still
+Migration `0008` is still
 required if Phase 1 has not yet been deployed.
 
 Teacher question authoring adds migration `0008`; use the migration/import steps

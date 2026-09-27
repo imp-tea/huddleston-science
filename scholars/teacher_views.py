@@ -10,7 +10,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.models import User
 from accounts.views import administrator_required
-from .models import Question, StudyAnswer, Topic
+from .models import Question, SavedQuiz, StudyAnswer, Topic
 from .discovery import calendar_progress, coverage_rows
 from .teacher_progress import practice_history, study_history
 from .question_authoring import StaleQuestion, change_question_status, create_question, edit_question
@@ -109,6 +109,13 @@ def question_create(request, topic_id):
 def question_edit(request, question_id):
     question = get_object_or_404(Question.objects.select_related('topic', 'current_revision', 'imported_revision'),
                                 pk=question_id, active=True, topic__active=True, topic__category__active=True)
+    return_quiz = None
+    try:
+        quiz_id = uuid.UUID(request.POST.get('return_quiz', '') if request.method == 'POST' else request.GET.get('quiz', ''))
+    except (ValueError, TypeError):
+        pass
+    else:
+        return_quiz = SavedQuiz.objects.filter(pk=quiz_id, owner=request.user, items__question=question).first()
     initial = dict(question.current_revision.payload)
     initial.update(version=question.edit_version, distractors='\n'.join(initial.get('distractors', [])))
     form = QuestionEditForm(request.POST if request.method == 'POST' else None,
@@ -123,9 +130,11 @@ def question_edit(request, question_id):
                 status = 409
         else:
             messages.success(request, 'Question saved. Existing sessions keep their original version.')
+            if return_quiz:
+                return redirect('scholars:quiz_detail', pk=return_quiz.pk)
             return redirect(topic_destination(question.topic_id))
     return render(request, 'scholars/teacher/question_form.html',
-        {'form': form, 'topic': question.topic, 'question': question, 'heading': 'Edit Question'}, status=status)
+        {'form': form, 'topic': question.topic, 'question': question, 'heading': 'Edit Question', 'return_quiz': return_quiz}, status=status)
 
 
 @administrator_required

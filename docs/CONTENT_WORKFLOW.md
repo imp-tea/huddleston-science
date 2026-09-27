@@ -47,6 +47,25 @@ Keep exports outside tracked `data/`; this schema is not accepted by `import_con
 Restore the complete database backup for normal recovery. There is no automatic
 merge/import tool for these supplementary exports in Phase 1.
 
+## Saved quizzes
+
+Saved quiz names, ordered question identities, reviewed revisions, archive status,
+and generation settings are stored in PostgreSQL (migration `0009`). Imports do
+not rewrite lists. Items follow the question bank's effective revision and flag
+changed or retired content for teacher review. Duplication preserves review status.
+Archiving a list or removing an item never deletes bank questions or revisions.
+
+The full database backup includes saved lists. For supplementary portable evidence:
+
+```sh
+python manage.py export_saved_quizzes /existing/private/directory/quizzes-2026-09-26.json
+```
+
+This command creates a new mode-600 JSON file and refuses overwrites. It contains
+active/archived quizzes, their exact order, settings, and both reviewed and current
+question evidence, with no student records. It is not an `import_content` input or
+an automatic restore format. Keep these exports private and outside tracked data.
+
 ## Imported question and reading content
 
 The approved typed/recall question bank is versioned in

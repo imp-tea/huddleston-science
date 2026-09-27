@@ -61,7 +61,7 @@ class TeacherProgressTests(TestCase):
         response = self.client.get(reverse('scholars:teacher_home'))
         self.assertContains(response, 'View Student Progress')
         self.assertContains(response, 'Quiz Creator')
-        self.assertContains(response, 'Coming next')
+        self.assertContains(response, reverse('scholars:quiz_list'))
         self.assertNotContains(response, 'href="#"')
         self.client.force_login(self.student)
         self.assertNotContains(self.client.get(reverse('scholars:dashboard')), 'Teacher Tools')

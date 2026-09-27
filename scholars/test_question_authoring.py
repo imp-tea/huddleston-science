@@ -302,8 +302,8 @@ class AuthoringConcurrencyTests(TransactionTestCase):
 class AuthoringMigrationTests(TransactionTestCase):
     def test_existing_question_gets_baseline_without_changing_current_revision(self):
         old = [('scholars', '0007_studypreferences_categories_and_more')]
-        new = [('scholars', '0008_question_authoring')]
         executor = MigrationExecutor(connection)
+        latest = executor.loader.graph.leaf_nodes()
         try:
             executor.migrate(old)
             apps = executor.loader.project_state(old).apps
@@ -316,7 +316,7 @@ class AuthoringMigrationTests(TransactionTestCase):
             question.current_revision = revision
             question.save()
         finally:
-            MigrationExecutor(connection).migrate(new)
+            MigrationExecutor(connection).migrate(latest)
         migrated = Question.objects.get(pk='migration-question')
         self.assertEqual(migrated.current_revision_id, revision.pk)
         self.assertEqual(migrated.imported_revision_id, revision.pk)

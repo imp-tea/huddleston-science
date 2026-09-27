@@ -110,8 +110,20 @@ weekly goal, activity calendar, topic completion, and recent/full history. Study
 attempts and older practice records open in read-only report pages. The existing
 Admin progress link now opens this same current view; older practice statistics
 are labeled separately. Teachers can reach the hub without choosing personal
-Study interests. Quiz Creator and Host a Quiz are labeled as upcoming features
-until their later phases in [the implementation plan](docs/TEACHER_TOOLS_AND_LIVE_QUIZZES.md).
+Study interests. **Quiz Creator** supports named lists, adding typed questions from
+topic menus, renaming, duplication, archiving/restoring, removal, and move-up/down
+ordering. Edited bank questions are flagged for explicit review; unavailable items
+remain visible until removed or restored. Random generation supports categories,
+optional subcategories, 1–100 questions, a per-topic limit, balanced or whole-pool
+sampling, and duplicate exclusion. Preview first, then explicitly save the exact
+selection. **Host a Quiz** remains upcoming in
+[the implementation plan](docs/TEACHER_TOOLS_AND_LIVE_QUIZZES.md).
+
+Migration `0009` adds saved quizzes and ordered items. Apply it before restarting
+the updated application. Lists live in PostgreSQL, alongside authoring and student
+records. `python manage.py export_saved_quizzes /path/to/new-quizzes.json` exports
+lists plus reviewed/current question evidence without student data; full database
+backups remain the recovery mechanism. See [Phase 3 notes](docs/TEACHER_TOOLS_PHASE3.md).
 
 Migration `0008` adds authoring provenance and seeds the imported baseline from
 each existing question's current revision. Apply it before running the updated

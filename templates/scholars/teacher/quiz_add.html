@@ -1,0 +1,9 @@
+{% extends 'study_base.html' %}{% block title %}Add Question to Quiz{% endblock %}{% block content %}
+{% include 'scholars/teacher/quiz_breadcrumb.html' with label='Add Question' %}
+<div class="page-heading"><h1>Add Question to Quiz</h1><p><a href="{% url 'scholars:topic' question.topic_id %}?questions=1#teacher-questions">← Back to {{ question.topic.title }}</a></p></div>
+{% if error %}<div class="notice" role="alert">{% for message in error %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+<article class="teacher-answer"><h2>{{ question.current_revision.payload.question }}</h2><p><strong>Answer:</strong> {{ question.current_revision.payload.correct_answer }}</p></article>
+<p>Choose an active quiz. Adding a question already in that quiz will keep just one copy.</p>
+<ul class="teacher-roster quiz-add-list">{% for quiz in quizzes %}<li><div><a href="{% url 'scholars:quiz_detail' quiz.pk %}">{{ quiz.name }}</a><small>{{ quiz.question_count }} questions</small></div><form method="post">{% csrf_token %}<input type="hidden" name="quiz_id" value="{{ quiz.pk }}"><input type="hidden" name="version" value="{{ quiz.edit_version }}"><input type="hidden" name="revision_id" value="{{ question.current_revision_id }}"><button class="secondary-button">Add to {{ quiz.name }}</button></form></li>{% empty %}<li class="teacher-empty">No active quizzes. <a href="{% url 'scholars:quiz_list' %}">Create a quiz</a>, then return to this question to add it.</li>{% endfor %}</ul>
+{% if quizzes.has_other_pages %}<nav class="pagination" aria-label="Quiz pages">{% if quizzes.has_previous %}<a href="?page={{ quizzes.previous_page_number }}">← Previous</a>{% endif %}<span>Page {{ quizzes.number }} of {{ quizzes.paginator.num_pages }}</span>{% if quizzes.has_next %}<a href="?page={{ quizzes.next_page_number }}">Next →</a>{% endif %}</nav>{% endif %}
+{% endblock %}

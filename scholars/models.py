@@ -336,3 +336,30 @@ class StudyActivity(models.Model):
     session = models.ForeignKey(StudySession, on_delete=models.CASCADE, related_name="activity")
     kind = models.CharField(max_length=12, choices=[("reading", "Reading"), ("quiz", "Quiz"), ("passed", "Passed")])
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+
+class SavedQuiz(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_quizzes')
+    name = models.CharField(max_length=160)
+    archived = models.BooleanField(default=False)
+    edit_version = models.PositiveIntegerField(default=0)
+    generation_settings = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class SavedQuizItem(models.Model):
+    quiz = models.ForeignKey(SavedQuiz, on_delete=models.CASCADE, related_name='items')
+    question = models.ForeignKey(Question, on_delete=models.PROTECT)
+    reviewed_revision = models.ForeignKey(QuestionRevision, on_delete=models.PROTECT)
+    position = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ['position']
+        constraints = [
+            models.UniqueConstraint(fields=['quiz', 'question'], name='unique_saved_quiz_question'),
+            models.UniqueConstraint(fields=['quiz', 'position'], name='unique_saved_quiz_position',
+                                    deferrable=models.Deferrable.DEFERRED),
+            models.CheckConstraint(condition=models.Q(position__gte=1), name='saved_quiz_position_positive'),
+        ]

@@ -17,8 +17,9 @@ from .importer import CONTENT_LOCK
 from .models import (Category, Question, StudyActivity, StudyAnswer, StudyAttempt,
                      StudyPreferences, StudyQuestion, StudySession, StudySessionTopic,
                      Subcategory, Topic, TopicCompletion)
+from .question_selection import group_questions
 from .services import lock_active_account
-from .typed_answers import for_item, grade, search_key
+from .typed_answers import for_item, grade
 
 rng = random.SystemRandom()
 ACTIVE_PHASES = [StudySession.Phase.READING, StudySession.Phase.QUIZ, StudySession.Phase.REVIEW]
@@ -136,27 +137,7 @@ def question_groups(session):
     """
     questions = list(StudyQuestion.objects.filter(session_topic__session=session)
                      .select_related("revision").order_by("pk"))
-    parents = list(range(len(questions)))
-
-    def root(i):
-        while parents[i] != i:
-            parents[i] = parents[parents[i]]
-            i = parents[i]
-        return i
-
-    keys = {}
-    for i, question in enumerate(questions):
-        payload = question.revision.payload
-        for kind, text in [("prompt", payload["question"]), ("answer", payload["correct_answer"])]:
-            key = (kind, search_key(text))
-            if key in keys:
-                parents[root(i)] = root(keys[key])
-            else:
-                keys[key] = i
-    groups = defaultdict(list)
-    for i, question in enumerate(questions):
-        groups[root(i)].append(question)
-    return list(groups.values())
+    return group_questions(questions, lambda q: q.revision.payload)
 
 
 def initial_question_ids(session):

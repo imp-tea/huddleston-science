@@ -1,0 +1,24 @@
+{% extends 'study_base.html' %}{% block title %}{{ quiz.name }} · Quiz Creator{% endblock %}{% block content %}
+{% include 'scholars/teacher/quiz_breadcrumb.html' with label=quiz.name %}
+<div class="page-heading"><h1>{{ quiz.name }}</h1><p>{{ items|length }} of 100 questions{% if quiz.archived %} · Archived{% endif %}</p><p>Questions follow the shared bank. Changes are flagged for review; saved results keep their original wording.</p></div>
+{% if error %}<div class="notice" role="alert">{% for message in error %}<p>{{ message }}</p>{% endfor %}<a href="{% url 'scholars:quiz_detail' quiz.pk %}">Reload this quiz</a></div>{% endif %}
+{% if needs_review %}<p class="notice">Review changed questions and remove or replace unavailable questions before hosting.</p>{% endif %}
+<div class="quiz-toolbar">
+{% if not quiz.archived %}<a class="secondary-button" href="{% url 'scholars:library' %}">Add questions from Explore</a>{% else %}<form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ quiz.edit_version }}"><button class="secondary-button" name="action" value="restore">Restore Quiz</button></form>{% endif %}
+</div>
+<div class="quiz-settings">
+{% if not quiz.archived %}<details><summary>Rename quiz</summary><form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ quiz.edit_version }}"><label for="rename">Quiz name</label><input id="rename" name="name" value="{{ quiz.name }}" maxlength="160" required><button class="secondary-button" name="action" value="rename">Save Name</button></form></details>{% endif %}
+<details><summary>Duplicate quiz</summary><form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ quiz.edit_version }}"><input type="hidden" name="request_key" value="{{ duplicate_key }}"><label for="duplicate-name">New quiz name</label><input id="duplicate-name" name="name" value="{{ quiz.name }}" maxlength="160" required><button class="secondary-button" name="action" value="duplicate">Duplicate Quiz</button></form></details>
+{% if not quiz.archived %}<details><summary>Archive quiz</summary><p>Move this quiz out of your active list. You can restore it later; questions remain in the bank.</p><form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ quiz.edit_version }}"><button class="secondary-button" name="action" value="archive">Archive Quiz</button></form></details>{% endif %}
+</div>
+{% for item in items %}<article class="teacher-answer quiz-item" id="question-{{ item.pk }}"><p class="eyebrow">Question {{ item.position }} · {{ item.question.topic.category_id }} · <a href="{% url 'scholars:topic' item.question.topic_id %}?questions=1#teacher-questions">{{ item.question.topic.title }}</a></p>
+{% if not item.available %}<p class="form-notice">Unavailable — remove this item or restore its question/topic before hosting.</p>{% elif item.changed %}<p class="form-notice">Changed since you last reviewed it.</p>{% endif %}
+{% if item.duplicate %}<p class="form-notice">Similar wording or answer appears elsewhere in this quiz. Keep it if intentional.</p>{% endif %}
+<h2>{{ item.question.current_revision.payload.question }}</h2><p><strong>Answer:</strong> {{ item.question.current_revision.payload.correct_answer }}</p>
+{% if item.changed %}<details><summary>Previously reviewed wording</summary><p>{{ item.reviewed_revision.payload.question }}</p><p><strong>Answer:</strong> {{ item.reviewed_revision.payload.correct_answer }}</p></details>{% endif %}
+{% if not quiz.archived %}<div class="quiz-item-actions"><form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ quiz.edit_version }}"><input type="hidden" name="item_id" value="{{ item.pk }}"><input type="hidden" name="revision_id" value="{{ item.question.current_revision_id }}">
+{% if item.changed and item.available %}<button class="secondary-button" name="action" value="review">Mark Reviewed</button>{% endif %}
+<button class="secondary-button" name="action" value="up" aria-label="Move question {{ item.position }} up" {% if forloop.first %}disabled{% endif %}>↑ Move up</button><button class="secondary-button" name="action" value="down" aria-label="Move question {{ item.position }} down" {% if forloop.last %}disabled{% endif %}>↓ Move down</button><button class="secondary-button" name="action" value="remove" aria-label="Remove question {{ item.position }}">Remove</button></form>
+{% if item.available %}<a href="{% url 'scholars:question_edit' item.question_id %}?quiz={{ quiz.pk }}">Edit Question</a>{% endif %}</div>{% endif %}
+</article>{% empty %}<p class="teacher-empty">This quiz is empty. Open a topic in Explore, expand Quiz Questions, and choose “Add Question to Quiz” from a question’s menu.</p>{% endfor %}
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'study_base.html' %}{% block title %}Quiz Creator · Teacher Tools{% endblock %}{% block content %}
+{% include 'scholars/teacher/quiz_breadcrumb.html' %}
+<div class="page-heading"><h1>Quiz Creator</h1><p>Build reusable question lists for classroom practice.</p></div>
+<div class="quiz-toolbar"><a class="primary-button" href="{% url 'scholars:quiz_random' %}">Generate a Random Quiz</a><a href="{% url 'scholars:quiz_list' %}{% if not archived %}?archived=1{% endif %}">{% if archived %}View active quizzes{% else %}View archived quizzes{% endif %}</a></div>
+<details class="quiz-create" {% if form.errors %}open{% endif %}><summary>Create an empty quiz</summary><form method="post" class="teacher-form">{% csrf_token %}{{ form.as_p }}<button class="secondary-button">Create Quiz</button></form></details>
+<h2>{% if archived %}Archived quizzes{% else %}My quizzes{% endif %}</h2>
+<ul class="teacher-roster">{% for quiz in quizzes %}<li><a href="{% url 'scholars:quiz_detail' quiz.pk %}"><span><strong>{{ quiz.name }}</strong><small>{{ quiz.question_count }} question{{ quiz.question_count|pluralize }} · Updated {{ quiz.updated_at|date:'M j, Y' }}</small></span><span aria-hidden="true">↗</span></a></li>{% empty %}<li class="teacher-empty">{% if archived %}No archived quizzes.{% else %}No quizzes yet. Name an empty quiz above, or generate one from the question bank.{% endif %}</li>{% endfor %}</ul>
+{% if quizzes.has_other_pages %}<nav class="pagination" aria-label="Quiz pages">{% if quizzes.has_previous %}<a href="?page={{ quizzes.previous_page_number }}{% if archived %}&amp;archived=1{% endif %}">← Previous</a>{% endif %}<span>Page {{ quizzes.number }} of {{ quizzes.paginator.num_pages }}</span>{% if quizzes.has_next %}<a href="?page={{ quizzes.next_page_number }}{% if archived %}&amp;archived=1{% endif %}">Next →</a>{% endif %}</nav>{% endif %}
+{% endblock %}
