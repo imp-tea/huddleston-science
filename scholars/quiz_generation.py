@@ -63,7 +63,7 @@ def generate(data):
     questions = available_questions().filter(topic__category_id__in=settings['categories'])
     if settings['subcategories']:
         questions = questions.filter(topic__subcategories__pk__in=settings['subcategories']).distinct()
-    questions = list(questions.select_related('topic', 'current_revision').only('id', 'topic_id', 'current_revision_id', 'current_revision__payload', 'topic__id', 'topic__title', 'topic__category_id').order_by('pk'))
+    questions = list(questions.select_related('topic', 'current_revision').only('id', 'difficulty', 'topic_id', 'current_revision_id', 'current_revision__payload', 'topic__id', 'topic__title', 'topic__category_id').order_by('pk'))
     groups = (group_questions(questions, lambda q: q.current_revision.payload)
               if settings['exclude_duplicates'] else [[q] for q in questions])
     rng.shuffle(groups)
@@ -102,8 +102,86 @@ def generate(data):
     if total != count:
         raise Shortage(count, total)
     selected = [rng.choice(variants) for edge, variants in group_edges if edge[2][1]]
+    targets = difficulty_targets(settings, count)
+    selected = fit_difficulty(selected, groups, targets, settings)
     rng.shuffle(selected)
     counts = Counter(q.topic.category_id for q in selected)
     distribution = [{'category': c, 'target': quotas[c], 'actual': counts[c]} for c in sorted(categories)]
-    return {'questions': selected, 'settings': settings, 'distribution': distribution,
+    difficulty_counts = Counter(q.difficulty for q in selected)
+    difficulty_distribution = [{'label': level.title(), 'target': targets[level], 'actual': difficulty_counts[level]}
+                               for level in ('easy', 'medium', 'hard')]
+    if difficulty_counts['']:
+        difficulty_distribution.append({'label': 'Not rated', 'target': 0, 'actual': difficulty_counts['']})
+    return {'difficulty_distribution': difficulty_distribution,
+            'difficulty_adjusted': any(row['target'] != row['actual'] for row in difficulty_distribution),
+            'questions': selected, 'settings': settings, 'distribution': distribution,
             'redistributed': balanced and any(counts[c] != quotas[c] for c in categories)}
+
+
+def difficulty_targets(settings, count):
+    """Largest remainders keep rounded whole-question targets summing to count."""
+    levels = ['easy', 'medium', 'hard']
+    weights = [settings['difficulty_' + level] for level in levels]
+    exact = [count * weight / sum(weights) for weight in weights]
+    targets = [int(value) for value in exact]
+    # Randomize equal remainders, avoiding a systematic Easy bias on short quizzes.
+    order = list(range(3))
+    rng.shuffle(order)
+    order.sort(key=lambda i: exact[i] - targets[i], reverse=True)
+    for i in order[:count - sum(targets)]:
+        targets[i] += 1
+    return dict(zip(levels, targets))
+
+
+def fit_difficulty(selected, groups, targets, settings):
+    """Improve the soft difficulty target without weakening any existing limits.
+
+    Start with the capacity-proven flow selection. Each exchange reduces a
+    difficulty deficit while retaining category shares, topic caps and duplicate
+    groups. This is a best-effort local fit, not a global optimality guarantee.
+    Unrated questions count as fallback only, never as an inferred difficulty.
+    """
+    selected = list(selected)
+    group_for = {q.pk: index for index, group in enumerate(groups) for q in group}
+    used = {group_for[q.pk] for q in selected}
+    topics = Counter(q.topic_id for q in selected)
+    counts = Counter(q.difficulty for q in selected)
+    candidates = defaultdict(list)
+    for group in groups:
+        for q in group:
+            candidates[q.difficulty].append(q)
+    for pool in candidates.values():
+        rng.shuffle(pool)
+    while True:
+        changed = False
+        for level in sorted(targets, key=lambda key: targets[key] - counts[key], reverse=True):
+            if counts[level] >= targets[level]:
+                continue
+            for candidate in candidates[level]:
+                group = group_for[candidate.pk]
+                for index, old in enumerate(selected):
+                    if counts[old.difficulty] <= targets.get(old.difficulty, 0):
+                        continue
+                    old_group = group_for[old.pk]
+                    if group in used and group != old_group:
+                        continue
+                    if settings['distribution'] == 'balanced' and candidate.topic.category_id != old.topic.category_id:
+                        continue
+                    cap = settings['max_per_topic']
+                    if cap and candidate.topic_id != old.topic_id and topics[candidate.topic_id] >= cap:
+                        continue
+                    selected[index] = candidate
+                    used.remove(old_group)
+                    used.add(group)
+                    topics[old.topic_id] -= 1
+                    topics[candidate.topic_id] += 1
+                    counts[old.difficulty] -= 1
+                    counts[level] += 1
+                    changed = True
+                    break
+                if changed:
+                    break
+            if changed:
+                break
+        if not changed:
+            return selected

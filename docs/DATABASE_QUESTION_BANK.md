@@ -16,8 +16,21 @@ provenance, and a question-change audit table. Content revisions remain immutabl
 Changing a stem or answer in the site editor clears the previous rating; save
 wording first, then assign a new rating. All questions support archive/restore.
 
-Difficulty is stored and displayed in teacher tools. This release does not change
-quiz-selection proportions; the desired mix is a separate product decision.
+Difficulty is stored and displayed in teacher tools. Quiz Creator's random
+generator now offers a draggable Easy/Medium/Hard triangle, initially an equal
+split, plus numeric weights. Whole-question targets use largest-remainder
+rounding. Generation first satisfies the requested count and existing
+category/topic/duplicate constraints, then improves the difficulty mix through
+valid question exchanges. This is a best-effort target, not a guarantee of the
+closest mathematically possible mix. Balanced category shares take priority;
+choose whole-pool sampling to remove that restriction. Unrated questions may
+fill remaining places and appear separately in the preview. The preview shows
+target and actual difficulty counts. Study quiz selection is unchanged.
+
+The generator's subcategory checklist follows selected categories and clears
+selections when their category is unchecked. This generator update needs no new
+database migration: deploy the code, collect static files, and restart normally;
+do not reapply the one-time difficulty import.
 
 ## Existing-server cutover
 

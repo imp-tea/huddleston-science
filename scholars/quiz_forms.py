@@ -36,6 +36,9 @@ class RandomQuizForm(forms.Form):
     categories = forms.MultipleChoiceField(widget=forms.CheckboxSelectMultiple)
     subcategories = forms.MultipleChoiceField(required=False, widget=forms.CheckboxSelectMultiple,
         help_text='Optional: check any subcategories to include. Uncheck all to use all selected categories.')
+    difficulty_easy = forms.FloatField(min_value=0, max_value=100, initial=1, required=False, label='Easy weight')
+    difficulty_medium = forms.FloatField(min_value=0, max_value=100, initial=1, required=False, label='Medium weight')
+    difficulty_hard = forms.FloatField(min_value=0, max_value=100, initial=1, required=False, label='Hard weight')
     count = forms.IntegerField(min_value=1, max_value=100, initial=20, label='Number of questions')
     max_per_topic = forms.IntegerField(min_value=1, max_value=100, required=False,
                                        label='Maximum questions per topic', help_text='Leave empty for no topic limit.')
@@ -48,6 +51,7 @@ class RandomQuizForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields['categories'].choices = [(c.pk, c.pk) for c in Category.objects.filter(active=True).order_by('pk')]
         self.subs = list(Subcategory.objects.filter(active=True, category__active=True).order_by('category_id', 'id'))
+        self.subcategory_categories = {s.pk: s.category_id for s in self.subs}
         self.fields['subcategories'].choices = [(s.pk, f'{s.category_id} — {s.payload.get("label", s.pk)}') for s in self.subs]
 
     def clean(self):
@@ -55,6 +59,16 @@ class RandomQuizForm(forms.Form):
         for field in ['categories', 'subcategories']:
             if field in data:
                 data[field] = list(dict.fromkeys(data[field]))
+        keys = ['difficulty_easy', 'difficulty_medium', 'difficulty_hard']
+        weights = [data.get(key) for key in keys]
+        if all(value is None for value in weights) and not any(key in self.errors for key in keys):
+            weights = [1, 1, 1]
+        elif any(value is None for value in weights) or sum(weights) <= 0:
+            self.add_error(None, 'Enter all three difficulty weights, with at least one greater than zero.')
+            weights = None
+        if weights is not None:
+            for key, value in zip(keys, weights):
+                data[key] = value
         selected = set(data.get('categories', []))
         if any(s.category_id not in selected for s in self.subs if s.pk in data.get('subcategories', [])):
             self.add_error('subcategories', 'Every selected subcategory must belong to a selected category.')

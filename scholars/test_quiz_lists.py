@@ -220,6 +220,64 @@ class GenerationTests(TestCase):
         return {'name': 'Generated practice', 'categories': ['Geography', 'Literature'], 'subcategories': [],
                 'count': 8, 'max_per_topic': '', 'distribution': 'balanced', 'exclude_duplicates': True, **changes}
 
+    def rate_questions(self):
+        for index, level in enumerate(('easy', 'medium', 'hard')):
+            Question.objects.filter(pk__endswith=f'-{index}').update(difficulty=level)
+
+    def test_difficulty_center_edge_and_vertex(self):
+        self.rate_questions()
+        for weights, count, expected in [((1, 1, 1), 9, [3, 3, 3]),
+                                          ((1, 1, 0), 8, [4, 4, 0]),
+                                          ((0, 0, 1), 6, [0, 0, 6])]:
+            for _ in range(5):
+                preview = generate(self.settings(count=count, distribution='pool',
+                    **dict(zip(('difficulty_easy', 'difficulty_medium', 'difficulty_hard'), weights))))
+                self.assertEqual([row['actual'] for row in preview['difficulty_distribution']], expected)
+                self.assertFalse(preview['difficulty_adjusted'])
+
+    def test_difficulty_shortage_falls_back_without_changing_count_or_limits(self):
+        self.rate_questions()
+        preview = generate(self.settings(count=12, max_per_topic=2,
+            difficulty_easy=0, difficulty_medium=0, difficulty_hard=100))
+        self.assertEqual(len(preview['questions']), 12)
+        self.assertTrue(preview['difficulty_adjusted'])
+        self.assertEqual([row['actual'] for row in preview['distribution']], [8, 4])
+        from collections import Counter
+        self.assertLessEqual(max(Counter(q.topic_id for q in preview['questions']).values()), 2)
+        self.assertEqual(len({q.pk for q in preview['questions']}), 12)
+        Question.objects.update(difficulty='')
+        preview = generate(self.settings())
+        self.assertEqual(preview['difficulty_distribution'][-1], {'label': 'Not rated', 'target': 0, 'actual': 8})
+
+    def test_difficulty_exchanges_preserve_duplicate_groups(self):
+        self.rate_questions()
+        a = Question.objects.get(pk='q-0-0')
+        b = Question.objects.get(pk='q-1-2')
+        edit_question(self.teacher, b.pk, b.edit_version,
+                      {'question': 'Another prompt', 'correct_answer': a.current_revision.payload['correct_answer']})
+        Question.objects.filter(pk=b.pk).update(difficulty='hard')
+        from .question_selection import group_questions
+        for _ in range(5):
+            preview = generate(self.settings(count=10, distribution='pool', max_per_topic=2,
+                difficulty_easy=0, difficulty_medium=0, difficulty_hard=1))
+            selected = preview['questions']
+            self.assertEqual(len(group_questions(selected, lambda q: q.current_revision.payload)), 10)
+
+    def test_difficulty_rounding_validation_and_saved_settings(self):
+        self.rate_questions()
+        preview = generate(self.settings(count=1))
+        self.assertEqual(sum(row['target'] for row in preview['difficulty_distribution']), 1)
+        for values in [(0, 0, 0), (-1, 1, 1), (101, 1, 1), ('nan', 1, 1), ('inf', 1, 1), ('', 1, 1)]:
+            with self.assertRaises(ValidationError):
+                generate(self.settings(**dict(zip(('difficulty_easy', 'difficulty_medium', 'difficulty_hard'), values))))
+        response = self.client.post(reverse('scholars:quiz_random'), self.settings(
+            difficulty_easy=2, difficulty_medium=3, difficulty_hard=5))
+        self.assertContains(response, 'Difficulty distribution')
+        self.assertContains(response, 'subcategory-categories')
+        self.assertEqual(response.context['form']['difficulty_hard'].value(), '5')
+        data = signing.loads(response.context['token'], salt=PREVIEW_SALT)
+        self.assertEqual(data['settings']['difficulty_hard'], 5)
+
     def test_balanced_exact_count_and_topic_limits(self):
         preview = generate(self.settings(max_per_topic=2))
         self.assertEqual(len(preview['questions']), 8)

@@ -1,11 +1,31 @@
-{% extends 'study_base.html' %}{% block title %}Generate a Quiz · Quiz Creator{% endblock %}{% block content %}
+{% extends 'study_base.html' %}{% load static %}{% block title %}Generate a Quiz · Quiz Creator{% endblock %}{% block content %}
 {% include 'scholars/teacher/quiz_breadcrumb.html' with label='Random Quiz' %}
 <div class="page-heading"><h1>Generate a Random Quiz</h1><p>Sample existing typed questions. Preview your selection, then save it as an editable quiz.</p></div>
 {% if preview %}<section class="quiz-preview"><h2>{{ form.cleaned_data.name }}</h2><p>{{ preview.questions|length }} questions · Not saved yet</p>
 {% if preview.redistributed %}<p class="notice">Some categories could not fill their balanced share under these limits. The preview redistributes those places as shown below. Save only if this mix works for you.</p>{% endif %}
 <table class="quiz-distribution"><caption>Category distribution</caption><thead><tr><th>Category</th>{% if preview.settings.distribution == 'balanced' %}<th>Requested share</th>{% endif %}<th>Preview count</th></tr></thead><tbody>{% for row in preview.distribution %}<tr><td>{{ row.category }}</td>{% if preview.settings.distribution == 'balanced' %}<td>{{ row.target }}</td>{% endif %}<td>{{ row.actual }}</td></tr>{% endfor %}</tbody></table>
+<table class="quiz-distribution"><caption>Difficulty distribution{% if preview.difficulty_adjusted %} · adjusted to available questions and other limits{% endif %}</caption><thead><tr><th>Difficulty</th><th>Target count</th><th>Preview count</th></tr></thead><tbody>{% for row in preview.difficulty_distribution %}<tr><td>{{ row.label }}</td><td>{{ row.target }}</td><td>{{ row.actual }}</td></tr>{% endfor %}</tbody></table>
 {% if not preview.settings.exclude_duplicates %}<p class="notice">Matching prompts or answers are allowed in this preview. Review the selection before saving.</p>{% endif %}
-{% for question in preview.questions %}<article class="teacher-answer"><p class="eyebrow">{{ forloop.counter }} · {{ question.topic.category_id }} · {{ question.topic.title }}</p><h3>{{ question.current_revision.payload.question }}</h3><p><strong>Answer:</strong> {{ question.current_revision.payload.correct_answer }}</p></article>{% endfor %}
+{% for question in preview.questions %}<article class="teacher-answer"><p class="eyebrow">{{ forloop.counter }} · {{ question.topic.category_id }} · {{ question.topic.title }} · {{ question.get_difficulty_display }}</p><h3>{{ question.current_revision.payload.question }}</h3><p><strong>Answer:</strong> {{ question.current_revision.payload.correct_answer }}</p></article>{% endfor %}
 <form method="post" action="{% url 'scholars:quiz_save_preview' %}">{% csrf_token %}<input type="hidden" name="preview" value="{{ token }}"><button class="primary-button">Save This Quiz</button></form><p class="muted">This exact preview can be saved for one hour. Bank changes require a fresh preview.</p></section>{% endif %}
-<details class="quiz-create" {% if not preview %}open{% endif %}><summary>{% if preview %}Adjust filters or generate another preview{% else %}Choose your quiz settings{% endif %}</summary><form method="post" class="teacher-form quiz-generator">{% csrf_token %}{{ form.as_p }}<button class="primary-button">Preview Quiz</button></form></details>
+<details class="quiz-create" {% if not preview %}open{% endif %}><summary>{% if preview %}Adjust filters or generate another preview{% else %}Choose your quiz settings{% endif %}</summary><form method="post" class="teacher-form quiz-generator">{% csrf_token %}{{ form.non_field_errors }}
+{% for field in form %}{% if field.name != 'difficulty_easy' and field.name != 'difficulty_medium' and field.name != 'difficulty_hard' %}<div class="quiz-setting">{{ field.errors }}{{ field.label_tag }}{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}</div>{% endif %}{% endfor %}
+<fieldset class="difficulty-mix"><legend>Difficulty mix</legend>
+<p class="muted" id="difficulty-help">Aim for this mix. Available questions, quiz length, and other limits may change the final proportions.</p>
+<div class="difficulty-graph" hidden>
+<svg viewBox="0 0 340 290" tabindex="0" role="group" aria-label="Difficulty mix triangle" aria-describedby="difficulty-keys difficulty-readout">
+<defs><linearGradient id="mix-fill" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#d9ebdf"/><stop offset="1" stop-color="#e6def2"/></linearGradient></defs>
+<path d="M40 250 L300 250 L170 24 Z" class="mix-area"/>
+<path d="M105 137 L235 137 M105 137 L170 250 M235 137 L170 250" class="mix-grid"/>
+<text x="40" y="277" text-anchor="middle">Easy</text><text x="300" y="277" text-anchor="middle">Medium</text><text x="170" y="16" text-anchor="middle">Hard</text>
+<circle class="mix-dot" cx="170" cy="174.667" r="9"/>
+</svg>
+<p id="difficulty-keys" class="muted">Drag the dot or click the triangle. Use arrow keys when focused; Home resets to an equal split.</p>
+<output id="difficulty-readout" aria-live="polite"></output>
+</div>
+<div class="difficulty-weights">{% for field in form %}{% if field.name == 'difficulty_easy' or field.name == 'difficulty_medium' or field.name == 'difficulty_hard' %}<div>{{ field.errors }}{{ field.label_tag }}{{ field }}</div>{% endif %}{% endfor %}</div>
+<p class="helptext">You can also enter relative weights: 1, 1, 1 gives an equal split; 0, 0, 1 gives all Hard. At least one weight must be above zero.</p>
+</fieldset><button class="primary-button">Preview Quiz</button></form></details>
+{{ form.subcategory_categories|json_script:"subcategory-categories" }}
+<script type="module" src="{% static 'quiz-generator.js' %}"></script>
 {% endblock %}
