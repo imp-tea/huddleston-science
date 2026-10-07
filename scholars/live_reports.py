@@ -1,9 +1,10 @@
-"""Read-only reports over presented, frozen questions and the retained start roster."""
+"""Read-only reports over presented, frozen questions and the retained players."""
 from collections import defaultdict
 
 from django.core.exceptions import ValidationError
 from django.db.models import Count, F, OuterRef, Q, Subquery
 
+from .live_scoring import leaderboard
 from .models import LiveParticipant, LiveQuiz, Topic, TopicRedirect
 
 
@@ -34,7 +35,7 @@ def report(game, participant=None, *, include_students=False):
     if game.phase != 'finished':
         raise ValidationError('Results are available only after the quiz finishes.')
     if participant and (participant.game_id != game.pk or participant.roster_at is None):
-        raise ValidationError('This student was not in this game’s start roster.')
+        raise ValidationError('This student did not join this game.')
     roster = game.participants.filter(roster_at__isnull=False)
     retained = roster.count()
     eligible = Q(responses__participant__roster_at__isnull=False, responses__participant__game_id=game.pk)
@@ -65,13 +66,14 @@ def report(game, participant=None, *, include_students=False):
             'topic_title': question.topic_title, 'topic_available': question.topic_id_snapshot in available,
             'category': question.category, 'correct_count': question.correct_count,
             'answered_count': question.answered_count, 'no_correct': question.correct_count == 0,
-            'status': status if participant else None, 'typed_answer': response.typed_answer if response else ''})
+            'status': status if participant else None, 'typed_answer': response.typed_answer if response else '',
+            'points': response.points if response else 0})
     presented = len(questions)
     covered = sum(row['correct_count'] > 0 for row in rows)
     original = game.roster_size_at_start
     summary = {'presented': presented, 'total': game.question_count, 'covered': covered,
         'coverage_percent': percentage(covered, presented), 'retained_players': retained,
-        'original_players': original, 'removed_players': max(0, original - retained) if original is not None else None,
+        'original_players': original, 'late_joiners': game.late_joiners, 'removed_players': max(0, original + game.late_joiners - retained) if original is not None else None,
         'cohort_unknown': original is None, 'no_correct': presented - covered,
         'no_responses': sum(row['answered_count'] == 0 for row in rows), 'partial': game.ended_early}
     personal = ({**outcomes, 'percent': percentage(outcomes['correct'], presented)} if participant else None)
@@ -81,6 +83,6 @@ def report(game, participant=None, *, include_students=False):
             responses__question__in=[q.pk for q in questions], responses__status='correct'))).order_by('user__username', 'pk'))
         for student in students:
             student.percent = percentage(student.score, presented)
-    return {'summary': summary, 'personal': personal, 'rows': rows, 'report_students': students,
+    return {'leaderboard': leaderboard(game), 'personal_points': sum(r.points or 0 for r in responses.values()), 'summary': summary, 'personal': personal, 'rows': rows, 'report_students': students,
         'categories': [{'name': name, **values, 'percent': percentage(values['covered'], values['presented'])}
                        for name, values in sorted(categories.items())]}

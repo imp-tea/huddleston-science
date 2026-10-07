@@ -396,6 +396,8 @@ class LiveQuiz(models.Model):
     ended_early = models.BooleanField(default=False)
     # Null means an older run without a trustworthy original roster count.
     roster_size_at_start = models.PositiveIntegerField(null=True, editable=False)
+    late_joiners = models.PositiveIntegerField(default=0, editable=False)
+    timed_scoring = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -425,6 +427,8 @@ class LiveParticipant(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='live_participations')
     joined_at = models.DateTimeField(auto_now_add=True)
     roster_at = models.DateTimeField(null=True)
+    timer_position = models.PositiveSmallIntegerField(default=0)
+    question_started_at = models.DateTimeField(null=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['game', 'user'], name='unique_live_participant')]
@@ -447,6 +451,7 @@ class LiveResponse(models.Model):
     status = models.CharField(max_length=12, choices=[(s, s.title()) for s in ['correct', 'incorrect', 'skipped', 'unanswered']])
     typed_answer = models.CharField(max_length=240, blank=True)
     finalized_at = models.DateTimeField(default=timezone.now)
+    points = models.PositiveSmallIntegerField(null=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['participant', 'question'], name='unique_live_response')]

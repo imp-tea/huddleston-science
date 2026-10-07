@@ -8,12 +8,14 @@ from django.db.models import Count
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from accounts.views import administrator_required
 from . import live
-from .models import LiveQuiz, LiveParticipant, SavedQuiz
+from .models import LiveQuiz, LiveQuizQuestion, LiveParticipant, SavedQuiz
 from .typed_answers import for_item
+from .live_scoring import leaderboard
 
 
 def api(view):
@@ -50,7 +52,7 @@ def invitation(user):
     elif game.participants.filter(user=user, roster_at__isnull=False).exists():
         label = 'Return to your live quiz'
     else:
-        return None
+        label = 'Join the Live Quiz!'
     return {'title': game.title, 'label': label, 'url': reverse('scholars:live_page', args=[game.pk]), 'id': str(game.pk)}
 
 
@@ -112,14 +114,29 @@ def state(request, pk):
             continue
         participants.append({'id': player.pk, 'name': player.user.username, 'presence': presence})
     own = game.participants.filter(user=request.user, roster_at__isnull=False).first()
-    data = {'id': str(game.pk), 'title': game.title, 'phase': game.phase, 'version': game.version,
+    now = timezone.now()
+    data = {'server_now': now.isoformat(), 'timed_scoring': game.timed_scoring, 'id': str(game.pk), 'title': game.title, 'phase': game.phase, 'version': game.version,
         'position': game.position, 'total': game.question_count, 'hosting': hosting,
         'host_present': game.host_id in active_ids, 'players': participants,
         'connected': sum(p['presence'] == 'connected' for p in participants),
         'roster_count': game.participants.filter(roster_at__isnull=False).count()}
+    if game.phase in {'running', 'finished'}:
+        data['leaderboard'] = leaderboard(game)
     if game.phase == 'running':
         question = game.questions.select_related('revision').defer('revision__context').get(position=game.position)
-        data['question'] = {'position': question.position, 'prompt': question.revision.payload['question']}
+        revealing = question.opened_at > now
+        data['revealing'] = revealing
+        if revealing:
+            previous = game.questions.select_related('revision').get(position=game.position - 1)
+            data['reveal'] = {'position': previous.position, 'prompt': previous.revision.payload['question'],
+                'answer': previous.revision.payload['correct_answer'], 'until': question.opened_at.isoformat()}
+        else:
+            data['question'] = {'position': question.position}
+            # Reveal the prompt only once the student's persisted clock has begun.
+            if hosting or not game.timed_scoring or (own and own.timer_position == game.position):
+                data['question']['prompt'] = question.revision.payload['question']
+        data['started_at'] = (own.question_started_at.isoformat()
+            if own and own.timer_position == game.position and own.question_started_at else None)
         if hosting:
             statuses = dict(question.responses.values_list('participant_id', 'status'))
             data['answered'] = len(statuses)
@@ -127,18 +144,19 @@ def state(request, pk):
                 player['answered'] = player['id'] in statuses
         elif own:
             response = question.responses.filter(participant=own).first()
-            data['response'] = {'status': response.status, 'answer': response.typed_answer} if response else None
+            data['response'] = {'status': response.status, 'answer': response.typed_answer, 'points': response.points} if response else None
     elif game.phase == 'finished':
         data['report_url'] = reverse('scholars:live_report', args=[game.pk])
         if game.roster_size_at_start is None:
             data['cohort_note'] = 'Original roster size was not recorded for this older quiz. Results use retained player records.'
-        elif game.roster_size_at_start > data['roster_count']:
+        elif game.roster_size_at_start + game.late_joiners > data['roster_count']:
             data['cohort_note'] = 'Some player accounts have been deleted. Results have been recalculated from retained records.'
         presented = game.position
         covered = game.questions.filter(position__lte=presented, responses__status='correct').distinct().count()
         data['summary'] = {'presented': presented, 'covered': covered,
             'coverage_percent': round(100 * covered / presented) if presented else 0, 'partial': game.ended_early,
-            'score': own.responses.filter(status='correct').count() if own else None}
+            'score': own.responses.filter(status='correct').count() if own else None,
+            'points': next((p['points'] for p in data['leaderboard'] if own and p['id'] == own.pk), None)}
     return JsonResponse(data)
 
 
@@ -151,6 +169,8 @@ def suggestions(request, pk, position):
     if game.phase != 'running' or position != game.position:
         raise live.LiveConflict('That question has closed.')
     question = game.questions.select_related('revision', 'answer_bank').get(position=position)
+    if question.opened_at is None or question.opened_at > timezone.now():
+        raise live.LiveConflict('Wait for this question to open.')
     bank = for_item(question)
     return JsonResponse({'position': position, 'version': game.version,
         'index': [{k: row[k] for k in ('text', 'key', 'parts')} for row in bank['index']]})
@@ -198,4 +218,16 @@ def answer(request, pk):
         raise ValidationError('Choose Submit or Skip.')
     position = integer(request, 'position')
     result = live.answer(request.user, pk, position, request.POST.get('typed_answer', ''), action == 'skip')
-    return JsonResponse({'position': position, 'outcome': result})
+    response = LiveParticipant.objects.get(game_id=pk, user=request.user).responses.filter(question__position=position).first()
+    return JsonResponse({'position': position, 'outcome': result, 'points': response.points if response else None})
+
+
+@login_required
+@require_POST
+@api
+def ready(request, pk):
+    position = integer(request, 'position')
+    started_at = live.ready(request.user, pk, position)
+    question = get_object_or_404(LiveQuizQuestion.objects.select_related('revision'), game_id=pk, position=position)
+    return JsonResponse({'started_at': started_at.isoformat(), 'server_now': timezone.now().isoformat(),
+        'question': {'position': position, 'prompt': question.revision.payload['question']}})

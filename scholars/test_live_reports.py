@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.db import connection
@@ -18,8 +19,10 @@ from .quiz_lists import create_quiz, add_question, update_quiz
 from .test_study import seed_study
 
 
+@patch('scholars.live.REVEAL_SECONDS', 0)
 class LiveReportTests(TestCase):
     @classmethod
+    @patch('scholars.live.REVEAL_SECONDS', 0)
     def setUpTestData(cls):
         cls.alice = seed_study()
         cls.alice.username = 'alice'
@@ -82,12 +85,14 @@ class LiveReportTests(TestCase):
         self.assertEqual(StudyActivity.objects.count(), 0)
         self.assertEqual(TopicCompletion.objects.count(), 0)
 
-    def test_student_only_gets_own_responses_no_rankings_or_student_table(self):
+    def test_student_sees_leaderboard_but_only_own_private_responses(self):
         response = self.client.get(self.url(), {'student_id': self.bob.pk, 'user': self.bob.pk})
         self.assertNotContains(response, 'Bob private wrong response')
         self.assertNotContains(response, 'Student reports')
         self.assertNotContains(response, self.personal_url(self.bob))
         self.assertIsNone(response.context['report_students'])
+        self.assertContains(response, 'Final leaderboard')
+        self.assertEqual([(p['name'], p['points']) for p in response.context['leaderboard']], [('bob', 200), ('alice', 100)])
         self.assertEqual(self.client.get(self.personal_url(self.bob)).status_code, 403)
         self.client.force_login(self.bob)
         response = self.client.get(self.url())

@@ -3,6 +3,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
+from unittest.mock import patch
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections, connections, IntegrityError, transaction
@@ -45,6 +46,7 @@ class LiveTests(TestCase):
         live.join(user or self.student, self.game.pk, key)
         return key
 
+    @patch('scholars.live.REVEAL_SECONDS', 0)
     def control(self, action, key=None):
         self.game.refresh_from_db()
         self.game = live.transition(self.teacher, self.game.pk, action, self.game.version, self.game.position, key or uuid.uuid4())
@@ -62,6 +64,115 @@ class LiveTests(TestCase):
         response = self.client.get(self.url('state'))
         self.assertEqual(response.status_code, 200)
         return response.json()
+
+    def test_timed_curve_grace_rounding_and_floor(self):
+        from .live_scoring import points_available
+        for seconds, expected in [(-1, 100), (0, 100), (3, 100), (4, 90),
+                                  (6, 73), (10.5, 44), (13, 33), (18, 25), (100, 25)]:
+            with self.subTest(seconds=seconds):
+                self.assertEqual(points_available(seconds), expected)
+        scores = [points_available(t / 10) for t in range(1000)]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_reveal_blocks_next_prompt_answers_and_controls_until_deadline(self):
+        self.start()
+        self.game = live.transition(self.teacher, self.game.pk, 'next', 1, 1, uuid.uuid4())
+        state = self.state()
+        self.assertTrue(state['revealing'])
+        self.assertEqual(state['reveal']['answer'], 'Canonical 0 number 0')
+        self.assertNotIn('question', state)
+        self.assertNotIn('Prompt 0 / 1?', json.dumps(state))
+        self.assertEqual(self.client.get(self.url('suggestions', 2)).status_code, 409)
+        with self.assertRaises(live.LiveConflict):
+            live.answer(self.student, self.game.pk, 2, 'Canonical 0 number 1')
+        with self.assertRaises(live.LiveConflict):
+            live.ready(self.student, self.game.pk, 2)
+        with self.assertRaises(live.LiveConflict):
+            live.transition(self.teacher, self.game.pk, 'next', 2, 2, uuid.uuid4())
+        opens = self.game.questions.get(position=2).opened_at
+        closes = self.game.questions.get(position=1).closed_at
+        self.assertEqual((opens - closes).total_seconds(), 4)
+        with patch('scholars.live.timezone.now', return_value=opens):
+            state = self.state()
+            self.assertFalse(state['revealing'])
+            self.assertNotIn('reveal', state)
+            self.assertNotIn('prompt', state['question'])
+            self.assertEqual(live.ready(self.student, self.game.pk, 2), opens)
+            self.assertEqual(self.state()['question']['prompt'], 'Prompt 0 / 1?')
+            self.assertEqual(live.answer(self.student, self.game.pk, 2, 'Canonical 0 number 1'), 'correct')
+            self.assertEqual(self.state()['response']['points'], 100)
+
+    def test_clock_persists_across_tabs_refresh_and_prompt_with_server_scoring(self):
+        self.start()
+        start = live.ready(self.student, self.game.pk, 1)
+        with patch('scholars.live.timezone.now', return_value=start + timedelta(seconds=6)):
+            self.connect()
+            self.assertEqual(live.ready(self.student, self.game.pk, 1), start)
+            self.assertEqual(self.state()['started_at'], start.isoformat())
+            with patch('scholars.live.grade', return_value='prompt'):
+                self.assertEqual(live.answer(self.student, self.game.pk, 1, 'partial'), 'prompt')
+            self.assertEqual(live.ready(self.student, self.game.pk, 1), start)
+            response = self.client.post(self.url('answer'), {'position': 1, 'action': 'answer',
+                'typed_answer': 'Canonical 0 number 0', 'points': 100, 'elapsed': 0})
+            self.assertEqual(response.json()['points'], 73)
+        with patch('scholars.live.timezone.now', return_value=start + timedelta(seconds=15)):
+            self.assertEqual(live.answer(self.student, self.game.pk, 1, 'wrong'), 'correct')
+            state = self.state()
+            self.assertEqual(state['response']['points'], 73)
+            self.assertEqual(state['leaderboard'][0]['points'], 73)
+            self.assertEqual(LiveResponse.objects.count(), 1)
+
+    def test_late_arrival_during_reveal_joins_current_question_with_fresh_clock(self):
+        self.start()
+        self.game = live.transition(self.teacher, self.game.pk, 'next', 1, 1, uuid.uuid4())
+        self.connect(self.other)
+        player = self.game.participants.get(user=self.other)
+        self.assertFalse(player.responses.exists())
+        self.assertTrue(self.state(self.other)['revealing'])
+        opens = self.game.questions.get(position=2).opened_at
+        with patch('scholars.live.timezone.now', return_value=opens + timedelta(seconds=5)):
+            start = live.ready(self.other, self.game.pk, 2)
+            self.assertEqual(start, opens + timedelta(seconds=5))
+            live.answer(self.other, self.game.pk, 2, 'Canonical 0 number 1')
+            self.control('end')
+        from .live_reports import report
+        result = report(self.game, player)
+        self.assertEqual(result['personal_points'], 100)
+        self.assertEqual(result['summary']['late_joiners'], 1)
+        self.assertEqual(result['summary']['removed_players'], 0)
+        self.assertEqual(result['leaderboard'][0]['name'], self.other.username)
+        self.assertEqual(self.state(self.other)['summary']['points'], 100)
+
+    def test_ready_endpoint_requires_connected_player_post_and_open_question(self):
+        self.start()
+        self.client.force_login(self.student)
+        self.assertEqual(self.client.get(self.url('ready')).status_code, 405)
+        self.assertNotIn('prompt', self.state()['question'])
+        response = self.client.post(self.url('ready'), {'position': 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['question']['prompt'], 'Prompt 0 / 0?')
+        self.assertEqual(response.json()['started_at'], self.state()['started_at'])
+        self.assertEqual(self.client.post(self.url('ready'), {'position': 2}).status_code, 409)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(self.url('ready'), {'position': 1}).status_code, 404)
+        self.client.force_login(self.teacher)
+        self.assertEqual(self.client.post(self.url('ready'), {'position': 1}).status_code, 404)
+
+    def test_wrong_skipped_unanswered_and_legacy_quizzes_do_not_earn_points(self):
+        self.connect(self.other)
+        self.start()
+        live.ready(self.student, self.game.pk, 1)
+        live.answer(self.student, self.game.pk, 1, 'Totally wrong')
+        live.answer(self.other, self.game.pk, 1, skip=True)
+        self.control('next')
+        self.control('end')
+        self.assertEqual(set(LiveResponse.objects.values_list('points', flat=True)), {0})
+        self.assertTrue(all(p['points'] == 0 for p in self.state()['leaderboard']))
+        self.game = live.host(self.teacher, self.quiz.pk, self.quiz.edit_version, uuid.uuid4())
+        LiveQuiz.objects.filter(pk=self.game.pk).update(timed_scoring=False)
+        self.start()
+        live.answer(self.student, self.game.pk, 1, 'Canonical 0 number 0')
+        self.assertIsNone(self.state()['response']['points'])
 
     def test_host_snapshots_title_order_bank_and_revision(self):
         question = self.game.questions.first()
@@ -102,7 +213,7 @@ class LiveTests(TestCase):
         self.assertEqual(client.post(self.url('connect'), {'connection': uuid.uuid4()}).status_code, 403)
         self.assertEqual(self.client.get(self.url('connect')).status_code, 405)
 
-    def test_roster_captures_only_present_players_and_rejects_late_join(self):
+    def test_roster_captures_present_players_and_admits_late_join(self):
         with self.assertRaises(ValidationError):
             self.control('start')
         self.connect()
@@ -111,11 +222,16 @@ class LiveTests(TestCase):
         self.control('start')
         self.assertTrue(self.game.participants.get(user=self.student).roster_at)
         self.assertIsNone(self.game.participants.get(user=self.other).roster_at)
-        with self.assertRaises(PermissionDenied):
-            self.connect(self.other)
         self.client.force_login(self.other)
-        self.assertEqual(self.client.get(self.url('state')).status_code, 403)
-        self.assertIsNone(self.client.get(reverse('scholars:live_discover')).json()['invitation'])
+        self.assertEqual(self.client.get(self.url('state')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('scholars:live_discover')).json()['invitation']['label'], 'Join the Live Quiz!')
+        self.connect(self.other)
+        self.assertIsNotNone(self.game.participants.get(user=self.other).roster_at)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.late_joiners, 1)
+        self.connect(self.other)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.late_joiners, 1)
 
     def test_multiple_tabs_departure_expiry_and_reconnection(self):
         a, b = self.connect(), self.connect()
@@ -132,7 +248,7 @@ class LiveTests(TestCase):
         self.assertEqual(self.state()['players'][0]['presence'], 'away')
         live.heartbeat(self.student, self.game.pk, c)
         self.assertEqual(self.state()['connected'], 1)
-        with self.assertRaises(PermissionDenied):
+        with self.assertRaises(live.LiveConflict):
             live.join(self.other, self.game.pk, c)
 
     def test_presence_tokens_are_scoped_and_cannot_be_resurrected(self):
@@ -204,6 +320,7 @@ class LiveTests(TestCase):
         self.connect(self.other)
         self.start()
         live.answer(self.other, self.game.pk, 1, 'Other private response')
+        live.ready(self.student, self.game.pk, 1)
         state = self.state()
         text = json.dumps(state)
         for secret in ['Canonical 0 number 0', 'correct_answer', 'Other private response', 'Prompt 0 / 1?', 'suppressedAnswers', 'revision']:
@@ -228,7 +345,7 @@ class LiveTests(TestCase):
         live.answer(self.other, self.game.pk, 2, 'Canonical 0 number 1')
         self.control('end')
         summary = self.state()['summary']
-        self.assertEqual(summary, {'presented': 2, 'covered': 2, 'coverage_percent': 100, 'partial': True, 'score': 1})
+        self.assertEqual(summary, {'presented': 2, 'covered': 2, 'coverage_percent': 100, 'partial': True, 'score': 1, 'points': 100})
         self.assertFalse(self.game.questions.filter(position=3, opened_at__isnull=False).exists())
         with self.assertRaises(live.LiveConflict):
             live.answer(self.student, self.game.pk, 2, 'Canonical 0 number 1')
@@ -301,14 +418,15 @@ class LiveRaceTests(TransactionTestCase):
         self.assertEqual(LiveResponse.objects.count(), 1)
         self.assertEqual(LiveQuiz.objects.get(pk=self.game.pk).position, 2)
 
-    def test_join_racing_start_is_either_rostered_or_denied(self):
+    def test_join_racing_start_always_admits_player(self):
         live.join(self.student, self.game.pk, uuid.uuid4())
         other = User.objects.create_user('late-player', must_change_password=False)
         self.race([lambda: live.join(other, self.game.pk, uuid.uuid4()),
                    lambda: live.transition(self.teacher, self.game.pk, 'start', 0, 0, uuid.uuid4())])
         self.game.refresh_from_db()
         participant = self.game.participants.filter(user=other).first()
-        self.assertTrue(participant is None or participant.roster_at is not None)
+        self.assertIsNotNone(participant)
+        self.assertIsNotNone(participant.roster_at)
 
     def test_duplicate_host_and_next_are_idempotent(self):
         live.transition(self.teacher, self.game.pk, 'cancel', 0, 0, uuid.uuid4())

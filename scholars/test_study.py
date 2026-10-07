@@ -86,7 +86,7 @@ class StudyTests(TestCase):
         device.force_login(self.other)
         self.assertContains(device.get(reverse('scholars:dashboard')), 'Learn a few random topics and take a quiz!')
         account = device.get(reverse('account'))
-        self.assertEqual(account.context['interests_form'].initial['categories'], ['Geography', 'Literature'])
+        self.assertCountEqual(account.context['interests_form'].initial['categories'], ['Geography', 'Literature'])
         self.assertEqual(StudyPreferences.objects.get(user=self.user).categories.count(), 1)
 
     def test_picker_ten_distinct_reshuffle_filters_and_completed_exclusion(self):

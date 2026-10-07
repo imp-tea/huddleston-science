@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from .models import (LiveConnection, LiveParticipant, LiveQuiz, LiveQuizQuestion,
                      LiveResponse, LiveTransition, SavedQuiz)
+from .live_scoring import points_available
 from .question_authoring import lock_author
 from .quiz_lists import ready_items
 from .services import lock_active_account
@@ -20,6 +21,7 @@ from .typed_answers import VERSION, for_item, grade
 
 OPEN_PHASES = ['waiting', 'running']
 LEASE_SECONDS = 20
+REVEAL_SECONDS = 4
 
 
 class LiveConflict(ValidationError):
@@ -44,10 +46,10 @@ def can_view(user, game):
         return
     if user.is_admin:
         raise PermissionDenied('Only the host can manage this game.')
-    if game.phase == 'waiting' or (game.phase == 'cancelled' and game.participants.filter(user=user).exists()):
+    if game.phase in OPEN_PHASES or (game.phase == 'cancelled' and game.participants.filter(user=user).exists()):
         return
     if not game.participants.filter(user=user, roster_at__isnull=False).exists():
-        raise PermissionDenied('This quiz has already started. Only its original players can return.')
+        raise PermissionDenied('Only players in this quiz can view its results.')
 
 
 def locked_game(game_id):
@@ -70,7 +72,7 @@ def host(user, quiz_id, version, request_key):
     if any(not i.question.topic.category.typed_bank_id for i in items):
         raise ValidationError('An autocomplete bank is unavailable. Rebuild the question bank before hosting.')
     game = LiveQuiz.objects.create(host=user, quiz=quiz, request_key=key, title=quiz.name,
-                                  question_count=len(items), grading_version=VERSION)
+                                  question_count=len(items), grading_version=VERSION, timed_scoring=True)
     LiveQuizQuestion.objects.bulk_create([LiveQuizQuestion(game=game, position=i.position,
         revision=i.question.current_revision, answer_bank_id=i.question.topic.category.typed_bank_id,
         topic_id_snapshot=i.question.topic_id, topic_title=i.question.topic.title,
@@ -90,9 +92,12 @@ def join(user, game_id, connection_id):
     if existing and (existing.game_id != game.pk or existing.user_id != user.pk or existing.ended_at):
         raise LiveConflict('This page connection has closed. Reload to reconnect.')
     if user.pk != game.host_id:
-        if game.phase == 'running' and not game.participants.filter(user=user, roster_at__isnull=False).exists():
-            raise LiveConflict('This quiz has already started.')
-        LiveParticipant.objects.get_or_create(game=game, user=user)
+        participant, _ = LiveParticipant.objects.get_or_create(game=game, user=user)
+        if game.phase == 'running' and participant.roster_at is None:
+            participant.roster_at = timezone.now()
+            participant.save(update_fields=['roster_at'])
+            game.late_joiners += 1
+            game.save(update_fields=['late_joiners'])
     LiveConnection.objects.update_or_create(pk=key, defaults={'game': game, 'user': user, 'last_seen': timezone.now()})
     return game
 
@@ -119,7 +124,7 @@ def close_question(game, now):
     answered = question.responses.values_list('participant_id', flat=True)
     missing = game.participants.filter(roster_at__isnull=False).exclude(pk__in=answered)
     LiveResponse.objects.bulk_create([LiveResponse(participant=p, question=question, status='unanswered',
-                                                   finalized_at=now) for p in missing])
+                                                   finalized_at=now, points=0 if game.timed_scoring else None) for p in missing])
     question.closed_at = now
     question.save(update_fields=['closed_at'])
 
@@ -149,13 +154,15 @@ def transition(user, game_id, action, version, position, request_key):
     elif action == 'cancel' and game.phase == 'waiting':
         game.phase, game.ended_at = 'cancelled', now
     elif action in {'next', 'end'} and game.phase == 'running':
+        if game.questions.get(position=game.position).opened_at > now:
+            raise LiveConflict('Wait for the answer reveal to finish before advancing.')
         close_question(game, now)
         if action == 'end' or game.position == game.question_count:
             game.phase, game.ended_at = 'finished', now
             game.ended_early = game.position < game.question_count
         else:
             game.position += 1
-            game.questions.filter(position=game.position).update(opened_at=now)
+            game.questions.filter(position=game.position).update(opened_at=now + timedelta(seconds=REVEAL_SECONDS))
     else:
         raise LiveConflict('This action is not available in the current quiz state.')
     game.version += 1
@@ -173,6 +180,9 @@ def answer(user, game_id, position, typed_answer='', skip=False):
     if game.phase != 'running' or type(position) is not int or position != game.position:
         raise LiveConflict('That question has closed. Continue with the current question.')
     question = game.questions.select_related('revision', 'answer_bank').get(position=position)
+    now = timezone.now()
+    if question.opened_at is None or question.opened_at > now or question.closed_at:
+        raise LiveConflict('Wait for this question to open.')
     previous = LiveResponse.objects.filter(participant=participant, question=question).first()
     if previous:
         return previous.status
@@ -187,6 +197,31 @@ def answer(user, game_id, position, typed_answer='', skip=False):
     if result == 'prompt':
         return result
     status = 'skipped' if skip else result
+    started_at = (participant.question_started_at if participant.timer_position == position
+                  else max(question.opened_at, participant.roster_at))
+    points = points_available((now - started_at).total_seconds()) if status == 'correct' else 0
     LiveResponse.objects.create(participant=participant, question=question, status=status,
-                                typed_answer='' if skip else typed_answer)
+                                typed_answer='' if skip else typed_answer, finalized_at=now,
+                                points=points if game.timed_scoring else None)
     return status
+
+
+@transaction.atomic
+def ready(user, game_id, position):
+    """Start each player's clock once; refreshes and other tabs reuse it."""
+    lock_active_account(user)
+    game = locked_game(game_id)
+    participant = get_object_or_404(LiveParticipant, game=game, user=user, roster_at__isnull=False)
+    if game.phase != 'running' or type(position) is not int or position != game.position:
+        raise LiveConflict('That question has closed.')
+    question = game.questions.get(position=position)
+    now = timezone.now()
+    if question.opened_at is None or question.opened_at > now or question.closed_at:
+        raise LiveConflict('Wait for this question to open.')
+    if not live_connections(game, now).filter(user=user).exists():
+        raise LiveConflict('Reconnect to this quiz before answering.')
+    if participant.timer_position != position:
+        participant.timer_position = position
+        participant.question_started_at = now
+        participant.save(update_fields=['timer_position', 'question_started_at'])
+    return participant.question_started_at

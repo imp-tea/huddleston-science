@@ -16,6 +16,7 @@ urlpatterns = [
     path("live/<uuid:pk>/heartbeat/", live_views.heartbeat, name="live_heartbeat"),
     path("live/<uuid:pk>/leave/", live_views.leave, name="live_leave"),
     path("live/<uuid:pk>/control/", live_views.control, name="live_control"),
+    path("live/<uuid:pk>/ready/", live_views.ready, name="live_ready"),
     path("live/<uuid:pk>/answer/", live_views.answer, name="live_answer"),
     path("teacher/quizzes/", quiz_views.index, name="quiz_list"),
     path("teacher/quizzes/random/", quiz_views.random_quiz, name="quiz_random"),

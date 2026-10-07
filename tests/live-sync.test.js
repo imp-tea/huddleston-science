@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {acceptState, isCurrentQuestion, retryDelay} from '../static/live-sync.js';
+import {acceptState, isCurrentQuestion, retryDelay, pointsAvailable} from '../static/live-sync.js';
 
 test('delayed state cannot move a game backwards or cross games', () => {
   const current = {id:'a', version:5, position:3, phase:'running'};
@@ -18,4 +18,15 @@ test('poll backoff is bounded', () => {
   assert.equal(retryDelay(0), 2000);
   assert.equal(retryDelay(1), 4000);
   assert.equal(retryDelay(100), 15000);
+});
+
+test('the clock has a three-second grace period and eases to 25 points', () => {
+  for (const [seconds, points] of [[0,100], [3,100], [4,90], [6,73], [10.5,44], [13,33], [18,25], [100,25]]) {
+    assert.equal(pointsAvailable(seconds), points);
+  }
+});
+test('same-version snapshots cannot undo an expired reveal or newer score', () => {
+  const current = {id:'a', version:2, position:2, server_now:'2026-10-07T15:00:04+00:00'};
+  assert.equal(acceptState(current, {...current, server_now:'2026-10-07T15:00:03+00:00'}), false);
+  assert.equal(isCurrentQuestion({...current, phase:'running', revealing:true}, 2), false);
 });

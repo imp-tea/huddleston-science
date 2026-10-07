@@ -122,13 +122,24 @@ remain visible until removed or restored. Random generation supports categories,
 optional subcategories, 1–100 questions, a per-topic limit, balanced or whole-pool
 sampling, and duplicate exclusion. Preview first, then explicitly save the exact
 selection. **Host a Quiz** opens a teacher-paced live game with a waiting room, automatic
-student invitation, roster locking, refresh/reconnect recovery, and manual question
-advancement. Live games use the same autocomplete and grading as Study. Responses
+student invitation, late joining, refresh/reconnect recovery, and manual question
+advancement. Advancing shows the previous answer for four seconds before opening
+the next question. New games award 100 points for a correct answer during the first
+three seconds after that student loads the question. Afterward, with `t` seconds
+past the grace period (capped at 15), points are `round(100 - 10t + t²/3)`,
+settling at 25. Incorrect, skipped, and unanswered questions earn zero. Server-side
+clocks survive refreshes and multiple tabs; a late arrival starts on the current
+question. A horizontal leaderboard updates about every second and appears in
+final results; classmates see totals, while typed responses remain private. Live games use the same autocomplete and grading as Study. Responses
 persist across disconnects. Finished reports show private responses and correct answers,
 team coverage, per-question counts, and partial-game totals. Students revisit their
 results from history; teachers can inspect individual reports and all/per-quiz run
 history. See [Phase 4 notes](docs/TEACHER_TOOLS_PHASE4.md) and
 [Phase 5 report notes](docs/TEACHER_TOOLS_PHASE5.md).
+
+Migration `0013` adds persisted points, question clocks, and late-arrival counts.
+Apply it and collect updated static files before restarting the application.
+Existing games retain their original accuracy-only results.
 
 Migration `0011` records the original roster size for new games so reports disclose
 when account deletion changes the retained cohort. Older games explicitly identify

@@ -1,5 +1,5 @@
 import {attachAutocomplete} from './typed-answer.js?v=live-quiz-4';
-import {acceptState, isCurrentQuestion, retryDelay} from './live-sync.js';
+import {acceptState, isCurrentQuestion, retryDelay, pointsAvailable} from './live-sync.js?v=timed-1';
 
 const root = document.querySelector('#live-quiz');
 const get = id => document.getElementById(id);
@@ -24,6 +24,7 @@ async function request(path, values) {
     const err = new Error('Your sign-in may have expired. Reload this page to sign in again.'); err.fatal = true; throw err;
   }
   const data = await response.json();
+  data.receivedAt = performance.now();
   if (!response.ok) {
     const err = new Error(data.error || 'Could not update the quiz. Try again.');
     err.fatal = response.status === 403 || response.status === 404;
@@ -47,7 +48,15 @@ function render(data) {
   }
   get('live-network').textContent = data.phase === 'finished' || data.phase === 'cancelled' ? 'Results saved.' : 'Connected · Updates automatically';
   show('live-lobby', data.phase === 'waiting');
-  show('live-question', data.phase === 'running');
+  show('live-question', data.phase === 'running' && !data.revealing);
+  show('live-reveal', Boolean(data.revealing));
+  if (data.revealing) {
+    get('live-reveal-position').textContent = `Question ${data.reveal.position} · Answer`;
+    get('live-reveal-prompt').textContent = data.reveal.prompt;
+    get('live-reveal-answer').textContent = data.reveal.answer;
+  }
+  show('live-leaderboard', ['running', 'finished'].includes(data.phase) && data.timed_scoring);
+  renderLeaderboard(data.leaderboard || []);
   show('live-finished', data.phase === 'finished' || data.phase === 'cancelled');
   show('live-leave', data.phase === 'waiting' || data.phase === 'running');
   get('live-host-presence').textContent = !hosting && !data.host_present && ['waiting', 'running'].includes(data.phase)
@@ -58,29 +67,31 @@ function render(data) {
     li.textContent = `${player.name} · ${player.presence === 'connected' ? 'Connected' : player.presence === 'away' ? 'Away / reconnecting' : 'Left'}${hosting && data.phase === 'running' ? (player.answered ? ' · Answered or skipped' : ' · Waiting for answer') : ''}`;
     return li;
   }));
-  if (data.phase === 'running') {
+  if (data.phase === 'running' && !data.revealing) {
     get('live-position').textContent = `Question ${data.position} of ${data.total}`;
-    get('live-prompt').textContent = data.question.prompt;
+    const ready = hosting || Boolean(data.started_at) || !data.timed_scoring;
+    get('live-prompt').textContent = ready ? data.question.prompt : 'Loading question…';
     show('live-tally', hosting);
     if (hosting) get('live-tally').textContent = `${data.answered} of ${data.roster_count} answered or skipped · ${data.roster_count - data.answered} still unanswered`;
     const response = data.response || finalized.get(data.position);
     show('live-feedback', !hosting && Boolean(response));
-    if (response) get('live-feedback').textContent = ({correct: 'Correct!', incorrect: 'Incorrect.', skipped: 'Skipped.', unanswered: 'No answer before advance.'}[response.status] || '') + ' Waiting for the next question.';
-    show('live-answer', !hosting && !response && bankPosition === data.position);
+    if (response) get('live-feedback').textContent = ({correct: 'Correct!', incorrect: 'Incorrect.', skipped: 'Skipped.', unanswered: 'No answer before advance.'}[response.status] || '') + (data.timed_scoring ? ` +${response.points ?? 0} points.` : '') + ' Waiting for the next question.';
+    show('live-answer', !hosting && !response && ready && bankPosition === data.position);
     form.querySelectorAll('button').forEach(b => { b.disabled = answerBusy; });
   } else show('live-answer', false);
+  renderPoints();
   if (hosting) {
     show('live-start', data.phase === 'waiting'); show('live-cancel', data.phase === 'waiting');
     show('live-next', data.phase === 'running'); show('live-end', data.phase === 'running' && data.position < data.total);
     get('live-start').disabled = actionBusy || data.connected === 0;
-    for (const id of ['live-next', 'live-end', 'live-cancel', 'live-confirm-yes']) get(id).disabled = actionBusy;
+    for (const id of ['live-next', 'live-end', 'live-cancel', 'live-confirm-yes']) get(id).disabled = actionBusy || Boolean(data.revealing);
     get('live-next').textContent = data.position === data.total ? 'Finish Quiz' : 'Next Question';
   }
   if (data.phase === 'finished' || data.phase === 'cancelled') {
     clearTimeout(heartTimer);
     show('live-confirm', false);
     get('live-finished-title').textContent = data.phase === 'cancelled' ? 'Quiz cancelled' : (data.summary.partial ? 'Quiz ended early' : 'Quiz complete!');
-    get('live-score').textContent = data.summary ? (hosting ? '' : `Your score: ${data.summary.score}/${data.summary.presented}. `) + (data.summary.partial ? `${data.summary.presented} of ${data.total} questions presented.` : `${data.total} questions played.`) : 'The waiting room was closed before play began.';
+    get('live-score').textContent = data.summary ? (hosting ? '' : `${data.timed_scoring ? `Your score: ${data.summary.points} points · ` : ''}${data.summary.score}/${data.summary.presented} correct. `) + (data.summary.partial ? `${data.summary.presented} of ${data.total} questions presented.` : `${data.total} questions played.`) : 'The waiting room was closed before play began.';
     show('live-report', Boolean(data.report_url));
     if (data.report_url) get('live-report').href = data.report_url;
     show('live-cohort-note', Boolean(data.cohort_note));
@@ -88,12 +99,44 @@ function render(data) {
     get('live-team').textContent = data.summary ? `Team coverage: ${data.summary.covered}/${data.summary.presented} (${data.summary.coverage_percent}%) answered correctly by at least one player.` : '';
   }
 }
+
+function renderPoints() {
+  const visible = !hosting && current?.phase === 'running' && !current.revealing && current.timed_scoring;
+  show('live-points', visible);
+  if (!visible) return;
+  const response = current.response || finalized.get(current.position);
+  const elapsed = current.started_at
+    ? (Date.parse(current.server_now) - Date.parse(current.started_at) + performance.now() - current.receivedAt) / 1000 : 0;
+  get('live-points').textContent = response ? `Points earned: ${response.points ?? 0}` : `Points: ${pointsAvailable(elapsed)}`;
+}
+let leaderboardKey = '';
+function renderLeaderboard(players) {
+  const key = JSON.stringify(players);
+  if (key === leaderboardKey) return;
+  leaderboardKey = key;
+  get('live-bars').replaceChildren(...players.map(player => {
+    const row = document.createElement('li');
+    const name = document.createElement('span'); name.className = 'leaderboard-name'; name.textContent = player.name;
+    const track = document.createElement('span'); track.className = 'leaderboard-track';
+    const bar = document.createElement('span'); bar.className = 'leaderboard-bar';
+    bar.style.width = `${player.percent}%`;
+    const score = document.createElement('span'); score.textContent = player.points;
+    bar.append(score); track.append(bar); row.append(name, track);
+    row.setAttribute('aria-label', `${player.name}: ${player.points} points`);
+    return row;
+  }));
+}
+const pointsTimer = setInterval(renderPoints, 100);
+
 async function loadBank() {
-  if (hosting || current?.phase !== 'running' || current.response || finalized.has(current.position) || bankPosition === current.position) return;
+  if (hosting || current?.phase !== 'running' || current.revealing || current.response || finalized.has(current.position) || bankPosition === current.position) return;
   const position = current.position;
   try {
     const data = await request(`suggestions/${position}/`);
     if (stopped || !isCurrentQuestion(current, position) || data.version < current.version) return;
+    const timing = await request('ready/', {position});
+    if (stopped || !isCurrentQuestion(current, position)) return;
+    Object.assign(current, timing);
     autocomplete.setBank(data.index); bankPosition = position; render(current);
   } catch (err) { if (!err.conflict) throw err; }
 }
@@ -115,17 +158,18 @@ async function poll() {
   if (stopped || pollBusy) return;
   pollBusy = true; clearTimeout(timer);
   try {
-    const data = await request('state/');
+    let data = await request('state/');
     if (stopped) return;
     if (!connected && ['waiting', 'running'].includes(data.phase)) {
       await request('connect/', {connection}); connected = true;
+      data = await request('state/');
     }
     render(data); if (!heartTimer && connected) pulse();
     await loadBank(); if (failures) error(); failures = 0;
   } catch (err) { failures++; get('live-network').textContent = 'Connection interrupted · Reconnecting…'; failure(err); }
   finally {
     pollBusy = false;
-    if (!stopped && !['finished', 'cancelled'].includes(current?.phase)) timer = setTimeout(poll, retryDelay(failures) + Math.random() * 300);
+    if (!stopped && !['finished', 'cancelled'].includes(current?.phase)) timer = setTimeout(poll, (failures ? retryDelay(failures) : 1000) + Math.random() * 150);
   }
 }
 async function control(action) {
@@ -149,7 +193,7 @@ if (hosting) {
 form.addEventListener('submit', async event => {
   if (event.defaultPrevented) return;
   event.preventDefault();
-  if (answerBusy || !current || finalized.has(current.position)) return;
+  if (answerBusy || !isCurrentQuestion(current, current?.position) || finalized.has(current.position)) return;
   const position = current.position;
   const action = event.submitter?.value || 'answer';
   answerBusy = true; error(); render(current);
@@ -160,7 +204,7 @@ form.addEventListener('submit', async event => {
       get('answer-status').textContent = 'Please be more specific or check the spelling, then try again.';
       get('answer-status').classList.add('answer-prompt'); input.focus();
     } else {
-      finalized.set(position, {status: data.outcome}); render(current);
+      finalized.set(position, {status: data.outcome, points: data.points}); render(current);
     }
   } catch (err) { failure(err); }
   finally { answerBusy = false; if (current) render(current); poll(); }
@@ -174,7 +218,7 @@ get('live-leave').addEventListener('click', async () => {
   try { await request('leave/', {connection}); } catch { beaconLeave(); }
   window.location.assign(root.dataset.home);
 });
-window.addEventListener('pagehide', () => { stopped = true; clearTimeout(timer); clearTimeout(heartTimer); beaconLeave(); });
+window.addEventListener('pagehide', () => { stopped = true; clearTimeout(timer); clearTimeout(heartTimer); clearInterval(pointsTimer); beaconLeave(); });
 window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
 window.addEventListener('focus', () => { if (!stopped) { poll(); if (!heartbeatBusy) { clearTimeout(heartTimer); pulse(); } } });
 poll();
