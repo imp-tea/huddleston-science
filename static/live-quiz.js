@@ -1,5 +1,5 @@
 import {attachAutocomplete} from './typed-answer.js?v=live-quiz-4';
-import {acceptState, isCurrentQuestion, retryDelay, pointsAvailable} from './live-sync.js?v=timed-1';
+import {acceptState, isCurrentQuestion, retryDelay, pointsAvailable} from './live-sync.js?v=reading-grace-2';
 
 const root = document.querySelector('#live-quiz');
 const get = id => document.getElementById(id);
@@ -107,7 +107,7 @@ function renderPoints() {
   const response = current.response || finalized.get(current.position);
   const elapsed = current.started_at
     ? (Date.parse(current.server_now) - Date.parse(current.started_at) + performance.now() - current.receivedAt) / 1000 : 0;
-  get('live-points').textContent = response ? `Points earned: ${response.points ?? 0}` : `Points: ${pointsAvailable(elapsed)}`;
+  get('live-points').textContent = response ? `Points earned: ${response.points ?? 0}` : `Points: ${pointsAvailable(elapsed, current.question.grace_seconds)}`;
 }
 let leaderboardKey = '';
 function renderLeaderboard(players) {

@@ -15,7 +15,7 @@ from accounts.views import administrator_required
 from . import live
 from .models import LiveQuiz, LiveQuizQuestion, LiveParticipant, SavedQuiz
 from .typed_answers import for_item
-from .live_scoring import leaderboard
+from .live_scoring import grace_seconds, leaderboard
 
 
 def api(view):
@@ -131,7 +131,8 @@ def state(request, pk):
             data['reveal'] = {'position': previous.position, 'prompt': previous.revision.payload['question'],
                 'answer': previous.revision.payload['correct_answer'], 'until': question.opened_at.isoformat()}
         else:
-            data['question'] = {'position': question.position}
+            data['question'] = {'position': question.position,
+                'grace_seconds': grace_seconds(question.revision.payload['question'])}
             # Reveal the prompt only once the student's persisted clock has begun.
             if hosting or not game.timed_scoring or (own and own.timer_position == game.position):
                 data['question']['prompt'] = question.revision.payload['question']
@@ -230,4 +231,5 @@ def ready(request, pk):
     started_at = live.ready(request.user, pk, position)
     question = get_object_or_404(LiveQuizQuestion.objects.select_related('revision'), game_id=pk, position=position)
     return JsonResponse({'started_at': started_at.isoformat(), 'server_now': timezone.now().isoformat(),
-        'question': {'position': position, 'prompt': question.revision.payload['question']}})
+        'question': {'position': position, 'prompt': question.revision.payload['question'],
+            'grace_seconds': grace_seconds(question.revision.payload['question'])}})

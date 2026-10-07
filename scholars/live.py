@@ -199,7 +199,7 @@ def answer(user, game_id, position, typed_answer='', skip=False):
     status = 'skipped' if skip else result
     started_at = (participant.question_started_at if participant.timer_position == position
                   else max(question.opened_at, participant.roster_at))
-    points = points_available((now - started_at).total_seconds()) if status == 'correct' else 0
+    points = points_available((now - started_at).total_seconds(), question.revision.payload['question']) if status == 'correct' else 0
     LiveResponse.objects.create(participant=participant, question=question, status=status,
                                 typed_answer='' if skip else typed_answer, finalized_at=now,
                                 points=points if game.timed_scoring else None)

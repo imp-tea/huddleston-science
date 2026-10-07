@@ -124,8 +124,9 @@ sampling, and duplicate exclusion. Preview first, then explicitly save the exact
 selection. **Host a Quiz** opens a teacher-paced live game with a waiting room, automatic
 student invitation, late joining, refresh/reconnect recovery, and manual question
 advancement. Advancing shows the previous answer for four seconds before opening
-the next question. New games award 100 points for a correct answer during the first
-three seconds after that student loads the question. Afterward, with `t` seconds
+the next question. New games award 100 points for a correct answer during a reading grace period of
+`5 + 0.065 × question characters` seconds after that student loads the question
+(including spaces and punctuation in the saved prompt). Afterward, with `t` seconds
 past the grace period (capped at 15), points are `round(100 - 10t + t²/3)`,
 settling at 25. Incorrect, skipped, and unanswered questions earn zero. Server-side
 clocks survive refreshes and multiple tabs; a late arrival starts on the current

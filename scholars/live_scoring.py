@@ -4,8 +4,13 @@ import math
 from django.db.models import Q, Sum
 
 
-def points_available(elapsed):
-    seconds = min(15, max(0, elapsed - 3))
+def grace_seconds(question_text):
+    """Reading time for the frozen prompt, including spaces and punctuation."""
+    return 5 + 0.065 * len(question_text)
+
+
+def points_available(elapsed, question_text):
+    seconds = min(15, max(0, elapsed - grace_seconds(question_text)))
     return math.floor(max(25, 100 - 10 * seconds + seconds ** 2 / 3) + .5)
 
 

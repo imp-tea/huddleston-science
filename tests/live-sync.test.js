@@ -20,9 +20,14 @@ test('poll backoff is bounded', () => {
   assert.equal(retryDelay(100), 15000);
 });
 
-test('the clock has a three-second grace period and eases to 25 points', () => {
-  for (const [seconds, points] of [[0,100], [3,100], [4,90], [6,73], [10.5,44], [13,33], [18,25], [100,25]]) {
-    assert.equal(pointsAvailable(seconds), points);
+test('the clock uses server-provided reading grace and then eases to 25 points', () => {
+  // Fractional grace is shared by the ready response and subsequent state polls.
+  for (const grace of [5, 5.78, 11.5, 18]) {
+    assert.equal(pointsAvailable(0, grace), 100);
+    assert.equal(pointsAvailable(grace - .1, grace), 100);
+    for (const [seconds, points] of [[0,100], [1,90], [3,73], [7.5,44], [10,33], [15,25], [100,25]]) {
+      assert.equal(pointsAvailable(grace + seconds, grace), points);
+    }
   }
 });
 test('same-version snapshots cannot undo an expired reveal or newer score', () => {

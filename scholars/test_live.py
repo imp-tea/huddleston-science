@@ -66,13 +66,26 @@ class LiveTests(TestCase):
         return response.json()
 
     def test_timed_curve_grace_rounding_and_floor(self):
-        from .live_scoring import points_available
-        for seconds, expected in [(-1, 100), (0, 100), (3, 100), (4, 90),
-                                  (6, 73), (10.5, 44), (13, 33), (18, 25), (100, 25)]:
-            with self.subTest(seconds=seconds):
-                self.assertEqual(points_available(seconds), expected)
-        scores = [points_available(t / 10) for t in range(1000)]
-        self.assertEqual(scores, sorted(scores, reverse=True))
+        from .live_scoring import grace_seconds, points_available
+        for prompt, grace in [('', 5), ('x' * 100, 11.5), ('x' * 200, 18), ('A 🐈?', 5.26)]:
+            with self.subTest(prompt=prompt):
+                self.assertAlmostEqual(grace_seconds(prompt), grace)
+                self.assertEqual(points_available(0, prompt), 100)
+                self.assertEqual(points_available(grace - .1, prompt), 100)
+                for after_grace, expected in [(0, 100), (1, 90), (3, 73), (7.5, 44),
+                                               (10, 33), (15, 25), (100, 25)]:
+                    self.assertEqual(points_available(grace + after_grace, prompt), expected)
+                scores = [points_available(t / 10, prompt) for t in range(1000)]
+                self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_correct_answer_keeps_full_points_through_reading_grace(self):
+        from .live_scoring import grace_seconds
+        self.start()
+        start = live.ready(self.student, self.game.pk, 1)
+        prompt = self.game.questions.get(position=1).revision.payload['question']
+        with patch('scholars.live.timezone.now', return_value=start + timedelta(seconds=grace_seconds(prompt))):
+            live.answer(self.student, self.game.pk, 1, 'Canonical 0 number 0')
+            self.assertEqual(self.state()['response']['points'], 100)
 
     def test_reveal_blocks_next_prompt_answers_and_controls_until_deadline(self):
         self.start()
@@ -105,7 +118,9 @@ class LiveTests(TestCase):
     def test_clock_persists_across_tabs_refresh_and_prompt_with_server_scoring(self):
         self.start()
         start = live.ready(self.student, self.game.pk, 1)
-        with patch('scholars.live.timezone.now', return_value=start + timedelta(seconds=6)):
+        from .live_scoring import grace_seconds
+        grace = grace_seconds(self.game.questions.get(position=1).revision.payload['question'])
+        with patch('scholars.live.timezone.now', return_value=start + timedelta(seconds=grace + 3)):
             self.connect()
             self.assertEqual(live.ready(self.student, self.game.pk, 1), start)
             self.assertEqual(self.state()['started_at'], start.isoformat())
@@ -113,7 +128,7 @@ class LiveTests(TestCase):
                 self.assertEqual(live.answer(self.student, self.game.pk, 1, 'partial'), 'prompt')
             self.assertEqual(live.ready(self.student, self.game.pk, 1), start)
             response = self.client.post(self.url('answer'), {'position': 1, 'action': 'answer',
-                'typed_answer': 'Canonical 0 number 0', 'points': 100, 'elapsed': 0})
+                'typed_answer': 'Canonical 0 number 0', 'points': 100, 'elapsed': 0, 'grace_seconds': 9999})
             self.assertEqual(response.json()['points'], 73)
         with patch('scholars.live.timezone.now', return_value=start + timedelta(seconds=15)):
             self.assertEqual(live.answer(self.student, self.game.pk, 1, 'wrong'), 'correct')
@@ -152,6 +167,8 @@ class LiveTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['question']['prompt'], 'Prompt 0 / 0?')
         self.assertEqual(response.json()['started_at'], self.state()['started_at'])
+        self.assertAlmostEqual(response.json()['question']['grace_seconds'], 5 + .065 * len('Prompt 0 / 0?'))
+        self.assertEqual(response.json()['question']['grace_seconds'], self.state()['question']['grace_seconds'])
         self.assertEqual(self.client.post(self.url('ready'), {'position': 2}).status_code, 409)
         self.client.force_login(self.other)
         self.assertEqual(self.client.post(self.url('ready'), {'position': 1}).status_code, 404)

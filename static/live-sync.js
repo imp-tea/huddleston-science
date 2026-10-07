@@ -10,7 +10,7 @@ export function retryDelay(failures) {
   return Math.min(15000, 2000 * 2 ** Math.min(failures, 3));
 }
 
-export function pointsAvailable(elapsed) {
-  const seconds = Math.min(15, Math.max(0, elapsed - 3));
+export function pointsAvailable(elapsed, graceSeconds) {
+  const seconds = Math.min(15, Math.max(0, elapsed - graceSeconds));
   return Math.round(100 - 10 * seconds + seconds * seconds / 3);
 }
