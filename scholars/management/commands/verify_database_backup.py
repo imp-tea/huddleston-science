@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import uuid
 from django.core.management.base import BaseCommand, CommandError
-from psycopg import sql
+from psycopg import Error as DatabaseError, sql
 from scholars.backups import archive_hash, connect, pg_tool, table_fingerprints
 
 
@@ -39,7 +39,17 @@ class Command(BaseCommand):
                     triggers = restored.execute("SELECT count(*) FROM pg_trigger WHERE tgrelid = 'accounts_user'::regclass AND NOT tgisinternal").fetchone()[0]
                     if not triggers:
                         raise CommandError('Administrator protection trigger is missing.')
-                self.stdout.write(f'Restore verified: {len(fingerprints)} tables; every row count and checksum matches.')
             finally:
                 if created:
-                    control.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(database)))
+                    # pg_restore and the inspection connection have both closed.
+                    # Ordinary DROP handles autovacuum workers internally; FORCE
+                    # can require signalling privileges the app must not need.
+                    try:
+                        control.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(database)))
+                    except DatabaseError as exc:
+                        raise CommandError(
+                            f'Could not remove temporary verification database {database}. '
+                            'Have a PostgreSQL administrator inspect and remove only this temporary database. '
+                            'The live database was not restored over.'
+                        ) from exc
+        self.stdout.write(f'Restore verified: {len(fingerprints)} tables; every row count and checksum matches. Temporary database removed.')

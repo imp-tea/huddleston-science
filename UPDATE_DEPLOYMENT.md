@@ -1,5 +1,27 @@
 # Deploy the Scholars Bowl redesign
 
+## Live quiz scoring — migration 0013
+
+This update adds late joining, a four-second answer reveal between questions,
+server-timed scoring, and live/final leaderboards. Apply migration
+`0013_live_quiz_scoring` and collect static assets. Existing quizzes retain their
+original accuracy-only results. Check joining after Start, refreshing during a
+question, the reveal interval, and the final leaderboard with separate teacher
+and student sessions.
+
+The backup verifier now drops its temporary database without `FORCE`, after its
+own restore and inspection connections close. Forced cleanup can fail when a
+PostgreSQL background process requires signalling privileges. The application
+role does not need additional signalling privileges. If an older verifier prints
+`Restore verified` and then fails at `DROP DATABASE ... WITH (FORCE)`, the backup
+passed; cleanup failed and the deployment stopped before pulling or migrating.
+The old version can be restarted with `sudo systemctl start huddleston`.
+Commit and push the verifier fix, then use **Existing checkout updates** below;
+that sequence takes a new backup and pulls the fix before verifying it. Preserve
+the previous backup and its manifest. A leftover `huddleston_restore_check_...`
+database is a disposable verification copy, not the live database; have the
+PostgreSQL administrator inspect its exact name before removing it.
+
 ## Database question ownership — migration 0012
 
 For this release, follow [the database question-bank cutover](docs/DATABASE_QUESTION_BANK.md#existing-server-cutover)
@@ -296,6 +318,9 @@ The restore check creates a temporary database and never restores over live data
   git rev-parse HEAD > "$HOME/huddleston-previous-commit.txt"
   sudo systemctl stop huddleston
   sudo -u huddleston ./deploy/manage backup_database /var/backups/huddleston
+  git pull --ff-only origin main
+  git rev-parse --short=12 HEAD
+  .venv/bin/python -m pip install -r requirements-production.txt
   (
     set -eu
     backup_file=$(sudo find /var/backups/huddleston -maxdepth 1 -type f -name '*.dump' | sort | tail -n 1)
@@ -304,9 +329,6 @@ The restore check creates a temporary database and never restores over live data
     sudo -u postgres psql -v ON_ERROR_STOP=1 -c 'ALTER ROLE huddleston CREATEDB;'
     sudo -u huddleston ./deploy/manage verify_database_backup "$backup_file"
   )
-  git pull --ff-only origin main
-  git rev-parse --short=12 HEAD
-  .venv/bin/python -m pip install -r requirements-production.txt
   sudo -u huddleston ./deploy/manage check --deploy
   sudo -u huddleston ./deploy/manage migrate --plan
   sudo -u huddleston ./deploy/manage migrate --noinput
@@ -317,9 +339,8 @@ The restore check creates a temporary database and never restores over live data
 )
 ```
 
-Compare the deployed commit ID with your Mac's commit. Expect migration 0007
-on the first redesign deployment; the later quiz fixes add no further schema
-changes. If the clean-checkout or ancestry check fails, inspect `git status` and stop;
+Compare the deployed commit ID with your Mac's commit. This live-quiz release
+adds migration 0013; already-applied migrations are skipped. If the clean-checkout or ancestry check fails, inspect `git status` and stop;
 do not discard changes with `reset --hard`. If a later command fails, the site
 may remain stopped. Fix the specific failure before restarting, and repeat
 step 7's checks after a successful update. No new checkout, archive, or symlink
